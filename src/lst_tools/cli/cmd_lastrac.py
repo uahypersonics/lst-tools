@@ -49,31 +49,52 @@ def _to_2d(arr: np.ndarray, name: str) -> np.ndarray:
 def _load_with_cfd_io(path: Path) -> tuple[Grid, Flow, dict]:
     """Read grid/flow via cfd-io and map into lst-tools core containers.
 
-    cfd-io returns arrays in (nx, ny) layout (Fortran convention).
-    lst-tools uses (ny, nx) layout (C/NumPy convention), so all 2-D
-    arrays are transposed here at the boundary.
+    lst-tools uses (ny, nx) layout.  The data orientation is detected
+    by checking whether x[0,0] < x[0,-1] (streamwise increases along
+    axis 1).  If not, the arrays are transposed.
     """
     grid_raw, flow_raw, attrs = cfd_read_file(path)
 
     if grid_raw is None or flow_raw is None:
         raise ValueError("cfd-io returned empty grid or flow")
 
-    # transpose from cfd-io (nx, ny) to lst-tools (ny, nx) convention
-    x = _to_2d(grid_raw["x"], "grid/x").T
-    y = _to_2d(grid_raw["y"], "grid/y").T
+    # get 2-D arrays before deciding on orientation
+    x = _to_2d(grid_raw["x"], "grid/x")
+    y = _to_2d(grid_raw["y"], "grid/y")
+
+    # determine orientation: in (ny, nx) convention, x[0,:] spans the
+    # streamwise direction so x[0,0] < x[0,-1].  If the opposite is
+    # true, the data is (nx, ny) and needs to be transposed.
+    do_transpose = x[0, 0] >= x[0, -1]
+    if do_transpose:
+        logger.debug("transposing arrays from (nx, ny) to (ny, nx)")
+        x = x.T
+        y = y.T
+    else:
+        logger.debug("arrays already in (ny, nx) convention, no transpose needed")
 
     # z is optional for 2-D LST setup; keep if present
     z = None
     if "z" in grid_raw:
-        z = _to_2d(grid_raw["z"], "grid/z").T
+        z = _to_2d(grid_raw["z"], "grid/z")
+        if do_transpose:
+            z = z.T
 
     grid = Grid(x=x, y=y, z=z, attrs=attrs or {})
 
+    # initialize fields dict and convert flow arrays to 2-D planes, transposing if needed
     fields: dict[str, np.ndarray] = {}
+
+    # loop over all flow variables returned by cfd-io; convert to 2-D planes and transpose if needed
     for key, val in flow_raw.items():
         arr = np.asarray(val)
         if arr.ndim in (2, 3):
-            fields[key] = _to_2d(arr, f"flow/{key}").T
+            field = _to_2d(arr, f"flow/{key}")
+            # transpose if needed
+            if do_transpose:
+                field = field.T
+            # store in fields dict
+            fields[key] = field
 
     flow = Flow(grid=grid, fields=fields, attrs=attrs or {})
     return grid, flow, attrs or {}

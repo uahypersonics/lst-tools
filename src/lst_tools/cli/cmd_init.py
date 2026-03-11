@@ -96,6 +96,12 @@ def cmd_init(
     # merge flow conditions into the default config (from --flow path or auto-discovered flow_conditions.dat)
     cfg_init = merge_flow_defaults(default_cfg, flow_path)
 
+    # auto-detect HDF5 meanflow file in the current directory
+    h5_files = list(Path(".").glob("*.h5")) + list(Path(".").glob("*.hdf5"))
+    if len(h5_files) == 1:
+        cfg_init["input_file"] = h5_files[0].name
+        logger.info("auto-detected meanflow file: %s", h5_files[0].name)
+
     # overwrite guard:
     # if the file already exists and --force is not set, do not overwrite
     if out.exists() and not force:

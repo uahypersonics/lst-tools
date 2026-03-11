@@ -4,15 +4,11 @@
 
 - Python 3.10 or later
 
-The following packages are installed automatically by pip:
+## From PyPI
 
-| Package | Purpose |
-|---|---|
-| `numpy` | Array operations |
-| `scipy` | Interpolation and signal processing |
-| `h5py` | HDF5 file I/O |
-| `tomli` | TOML config reading (Python < 3.11) |
-| `tomli-w` | TOML config writing |
+```bash
+pip install lst-tools
+```
 
 ## From Source
 
@@ -36,6 +32,7 @@ This includes:
 
 - [pytest](https://docs.pytest.org/) and [pytest-cov](https://pytest-cov.readthedocs.io/) for testing
 - [ruff](https://docs.astral.sh/ruff/) for linting
+
 ## Verify Installation
 
 ```python
