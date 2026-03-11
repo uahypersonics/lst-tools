@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from unittest.mock import patch
 
 from typer.testing import CliRunner
@@ -11,6 +12,8 @@ from lst_tools.config.schema import Config
 
 runner = CliRunner()
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
 
 class TestTrackingCLI:
     """Test suite for tracking CLI module."""
@@ -18,7 +21,8 @@ class TestTrackingCLI:
     def test_help_shows_options(self):
         result = runner.invoke(cli, ["setup", "tracking", "--help"])
         assert result.exit_code == 0
-        assert "--cfg" in result.output
+        plain = _ANSI_RE.sub("", result.output)
+        assert "--cfg" in plain
 
     @patch("lst_tools.cli.cmd_tracking.tracking_setup")
     @patch("lst_tools.cli.cmd_tracking.read_config")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +14,8 @@ from lst_tools.config.schema import Config
 
 runner = CliRunner()
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
 
 class TestParsingCLI:
     """Test suite for parsing CLI module."""
@@ -20,8 +23,9 @@ class TestParsingCLI:
     def test_help_shows_options(self):
         result = runner.invoke(cli, ["setup", "parsing", "--help"])
         assert result.exit_code == 0
+        plain = _ANSI_RE.sub("", result.output)
         for opt in ("--cfg", "--out", "--name", "--auto-fill"):
-            assert opt in result.output
+            assert opt in plain
 
     @patch("lst_tools.cli.cmd_parsing.parsing_setup")
     @patch("lst_tools.cli.cmd_parsing.read_config")

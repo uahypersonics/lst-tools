@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from unittest.mock import patch, MagicMock
 
 from typer.testing import CliRunner
@@ -14,6 +15,8 @@ from lst_tools.cli.main import cli
 DEFAULTS = Config().to_dict()
 
 runner = CliRunner()
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 class TestMergeFlowDefaults:
@@ -62,8 +65,9 @@ class TestInitHelp:
     def test_init_help_shows_options(self):
         result = runner.invoke(cli, ["init", "--help"])
         assert result.exit_code == 0
+        plain = _ANSI_RE.sub("", result.output)
         for opt in ("--out", "--force", "--flow", "--geometry"):
-            assert opt in result.output
+            assert opt in plain
 
 
 class TestInitCommand:
@@ -199,7 +203,8 @@ class TestInitGeometryCLI:
     def test_init_geometry_help_shows_option(self):
         result = runner.invoke(cli, ["init", "--help"])
         assert result.exit_code == 0
-        assert "--geometry" in result.output
+        plain = _ANSI_RE.sub("", result.output)
+        assert "--geometry" in plain
 
     def test_init_invalid_geometry(self):
         result = runner.invoke(cli, ["init", "--geometry", "wedge"])
