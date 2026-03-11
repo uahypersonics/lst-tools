@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# project name
+name = "lst-tools"
+description = "Python toolkit with pre- and postprocessing utilities for linear stability theory (LST) code"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+version = "0.1.0"
+# require at least python 3.10
+requires-python = ">=3.10"
+dependencies = [
+  "cfd-io>=0.1.1",
+  "numpy>=1.22",
+  "tomli>=2.0; python_version < '3.11'",
+  "tomli-w>=1.0",
+  "scipy>=1.15",
+  "typer>=0.9.0",
+]
+
+[project.urls]
+Homepage = "https://uahypersonics.github.io/lst-tools"
+Repository = "https://github.com/uahypersonics/lst-tools"
+Issues = "https://github.com/uahypersonics/lst-tools/issues"
+#
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "tqdm", "rich", "ruff"]
+docs = [
+  "mkdocs-material>=9.0",
+  "mkdocstrings[python]>=0.24",
+  "mkdocs-bibtex>=2.0",
+]
+
+
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = { find = { where = ["src"] } }
+#
+
+[project.scripts]
+lst-tools = "lst_tools.cli.main:cli"
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-q"]
+
+[tool.coverage.run]
+source = ["lst_tools"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+exclude = [
+  ".git",
+  "__pycache__",
+  "build",
+  "debug",
+  "docs"
+]
+lint.ignore = [
+  "E741" # Ambiguous variable names
+]

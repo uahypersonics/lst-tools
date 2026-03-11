@@ -1,0 +1,120 @@
+# BSD-3-Clause License - see LICENSE file
+
+# --------------------------------------------------
+# site metadata
+# --------------------------------------------------
+site_name: lst-tools
+site_url: https://uahypersonics.github.io/lst-tools
+site_author: Christoph Hader
+site_description: Python toolkit for Linear Stability Theory (LST) analysis.
+
+# --------------------------------------------------
+# github repository (adds link in top right corner)
+# --------------------------------------------------
+repo_name: uahypersonics/lst-tools
+repo_url: https://github.com/uahypersonics/lst-tools
+edit_uri: edit/main/docs/
+
+# --------------------------------------------------
+# theme configuration
+# uses Material for MkDocs: https://squidfunk.github.io/mkdocs-material/
+# --------------------------------------------------
+theme:
+  name: material
+  # color palette with 3-way toggle: auto (system), light, dark
+  # available colors: https://squidfunk.github.io/mkdocs-material/setup/changing-the-colors/
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: blue grey
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: blue grey
+      toggle:
+        icon: material/weather-night
+        name: Switch to system preference
+  # navigation and UI features
+  features:
+    - navigation.tabs       # top-level sections as tabs in header
+    - navigation.sections   # bold section headers in sidebar
+    - navigation.indexes    # section index pages (index.md in each folder)
+    - navigation.top        # back-to-top button
+    - content.code.copy     # copy button on code blocks
+    - content.code.annotate # code annotations
+    - content.action.edit   # edit page link
+    - content.action.view   # view source link
+
+# --------------------------------------------------
+# plugins
+# --------------------------------------------------
+plugins:
+  - search
+  - bibtex:
+      bib_file: "docs/refs.bib"
+
+# --------------------------------------------------
+# markdown extensions for syntax highlighting, math, etc.
+# --------------------------------------------------
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      linenums: true # enable line numbers in code blocks
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.arithmatex:    # LaTeX math support
+      generic: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition              # note/warning/tip boxes
+  - pymdownx.details        # collapsible sections
+  - tables
+  - attr_list
+  - md_in_html
+  - footnotes               # LaTeX-style references [^1]
+
+# --------------------------------------------------
+# javascript for MathJax (LaTeX rendering)
+# --------------------------------------------------
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+# --------------------------------------------------
+# navigation structure for the documentation
+# --------------------------------------------------
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - User Guide:
+    - user-guide/index.md
+    - Basic Usage: user-guide/basic-usage.md
+    - CLI: user-guide/cli.md
+    - Config Files: user-guide/config-files.md
+  - Theory:
+    - theory/index.md
+  - API Reference:
+    - api/index.md
+    - Grid & Flow: api/core.md
+    - Config: api/config.md
+    - Data I/O: api/data-io.md
+    - Geometry: api/geometry.md
+    - Convert: api/convert.md
+    - Setup: api/setup.md
+    - Processing: api/processing.md
+    - HPC: api/hpc.md
+  - Examples: examples.md
