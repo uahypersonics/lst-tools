@@ -109,6 +109,7 @@ nav:
     - theory/index.md
   - API Reference:
     - api/index.md
+    - Architecture: api/architecture.md
     - Grid & Flow: api/core.md
     - Config: api/config.md
     - Data I/O: api/data-io.md
