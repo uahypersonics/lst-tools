@@ -25,12 +25,12 @@ def _most_common_int(vals: list[int]) -> tuple[int, dict[int, int]]:
 # ------------------------------------------------------------------
 def coerce_time_to_hms(val: float | str | None) -> str:
     """Convert *val* (hours as ``float``, or ``"HH:MM:SS"``) to ``HH:MM:SS``."""
-    if isinstance(val, str):
+    if isinstance(val, str) and val:
         parts = val.split(":")
         if len(parts) == 3 and all(p.isdigit() for p in parts):
             return val
 
-    h = float(val if val is not None else 1.0)
+    h = float(val if val not in (None, "") else 1.0)
     if h < 0:
         h = 1.0
 
