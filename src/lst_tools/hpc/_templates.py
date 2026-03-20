@@ -55,7 +55,8 @@ def render_slurm(
         lines.append(f"#SBATCH --constraint={job.constraint}")
 
     # working directory
-    lines.append(f"cd {job.workdir or '${{SLURM_SUBMIT_DIR}}'}")
+    workdir = job.workdir or "${SLURM_SUBMIT_DIR}"
+    lines.append(f"cd {workdir}")
 
     # module loads (profile-driven — may be empty)
     if job.modules:
