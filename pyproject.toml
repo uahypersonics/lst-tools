@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=70", "wheel"]
+requires = ["setuptools>=70", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ name = "lst-tools"
 description = "Python toolkit with pre- and postprocessing utilities for linear stability theory (LST) code"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
-version = "0.1.1"
+dynamic = ["version"]
 # require at least python 3.10
 requires-python = ">=3.10"
 dependencies = [
@@ -38,7 +38,8 @@ docs = [
 [tool.setuptools]
 package-dir = { "" = "src" }
 packages = { find = { where = ["src"] } }
-#
+
+[tool.setuptools_scm]
 
 [project.scripts]
 lst-tools = "lst_tools.cli.main:cli"

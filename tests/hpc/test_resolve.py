@@ -6,7 +6,7 @@ import pytest
 
 from lst_tools.hpc._detect import DetectedEnv
 from lst_tools.hpc._profiles import ClusterProfile, Scheduler
-from lst_tools.hpc._resolve import ResolvedJob, resolve, _pick_best_account
+from lst_tools.hpc._resolve import ResolvedJob, resolve, _select_account
 
 
 # ------------------------------------------------------------------
@@ -71,23 +71,23 @@ class TestResolvedJob:
 # ------------------------------------------------------------------
 class TestPickBestAccount:
     def test_empty_resources(self):
-        assert _pick_best_account(()) is None
+        assert _select_account(()) is None
 
     def test_single_resource(self):
-        best = _pick_best_account((_RESOURCE_ROW,))
+        best = _select_account((_RESOURCE_ROW,))
         assert best is not None
         assert best["account"] == "myacct"
 
     def test_prefers_more_remaining(self):
         r1 = {**_RESOURCE_ROW, "account": "small", "remaining": 100}
         r2 = {**_RESOURCE_ROW, "account": "big", "remaining": 50000}
-        best = _pick_best_account((r1, r2))
+        best = _select_account((r1, r2))
         assert best["account"] == "big"
 
     def test_prefers_high_priority(self):
         std = {**_RESOURCE_ROW, "account": "std", "remaining": 50000, "partition": "standard"}
         hp = {**_RESOURCE_ROW, "account": "hp", "remaining": 10000, "partition": "high_priority"}
-        best = _pick_best_account((std, hp))
+        best = _select_account((std, hp))
         assert best["account"] == "hp"
 
 

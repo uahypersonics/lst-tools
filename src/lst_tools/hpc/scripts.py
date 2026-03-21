@@ -27,20 +27,20 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------
 def script_build(
     cfg: ResolvedJob,
-    out_path: str | Path,
+    fpath: str | Path,
     *,
     args: list[str] | None = None,
     lst_exe: str | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> Path:
-    """Render a batch script and write it to *out_path*.
+    """Render a batch script and write it to *fpath*.
 
     Parameters
     ----------
     cfg:
         A :class:`ResolvedJob` (from :func:`hpc_configure`).
-    out_path:
-        Directory where the script file is created.
+    fpath:
+        Path where the script file is created.
     args:
         Command-line arguments for the solver.
     lst_exe:
@@ -54,7 +54,7 @@ def script_build(
         Absolute path to the written script file.
     """
     logger.debug("hpc config: %s", cfg)
-    logger.debug("output path: %s", out_path)
+    logger.debug("output path: %s", fpath)
     logger.debug("extra env: %s", extra_env)
 
     if cfg.fname_run_script is None:
@@ -63,11 +63,16 @@ def script_build(
             "(fname_run_script is None)."
         )
 
+    # generate script content (autodetects scheduler and launcher)
     text = render(cfg, lst_exe=lst_exe or "lst.x", args=args, extra_env=extra_env)
 
-    p = Path(out_path)
-    fname_out = p / cfg.fname_run_script
-    fname_out.write_text(text, encoding="utf-8")
-    fname_out.chmod(0o755)
+    # make sure fpath is a Path object
+    fpath = Path(fpath)
+    # assemble the full path to the script file and write it
+    fname = fpath / cfg.fname_run_script
+    # write the script text to file (UTF-8 encoding)
+    fname.write_text(text, encoding="utf-8")
+    # make the script executable
+    fname.chmod(0o755)
 
-    return fname_out
+    return fname

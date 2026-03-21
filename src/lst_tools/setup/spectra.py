@@ -208,6 +208,7 @@ def _setup_single_case(
             case_dir,
             lst_exe=lst_exe,
             args=["lst_input.dat", ">run.log"],
+            extra_env=cfg.hpc.extra_env,
         )
 
     return written_input_path

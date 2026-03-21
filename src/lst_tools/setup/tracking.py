@@ -785,6 +785,13 @@ def _build_and_write_case(
     logger.info("skip index for tracking i_step = %s", i_step)
 
     n_stations_tracking = int((abs(idx_s - idx_e) + 1) / i_step)
+    if n_stations_tracking < 1:
+        logger.warning(
+            "computed 0 tracking stations (idx_s=%s, idx_e=%s, i_step=%s) "
+            "— check x_s/x_e in config; defaulting to 1 node",
+            idx_s, idx_e, i_step,
+        )
+        n_stations_tracking = max(n_stations_tracking, 1)
     logger.info(
         "number of stations to be computed for tracking = %s",
         n_stations_tracking,
@@ -803,7 +810,7 @@ def _build_and_write_case(
     # generate HPC run script
     env = detect()
     ntasks_per_node = env.cpus_per_node or 1
-    nodes_optimal = n_stations_tracking // ntasks_per_node
+    nodes_optimal = max(1, n_stations_tracking // ntasks_per_node)
 
     user_hpc = (
         cfg.to_dict().get("hpc", {})
@@ -863,6 +870,7 @@ def _build_and_write_case(
         Path(dir_name),
         lst_exe=lst_exe,
         args=["lst_input.dat", ">run.log"],
+        extra_env=cfg.hpc.extra_env,
     )
 
     return hpc_cfg

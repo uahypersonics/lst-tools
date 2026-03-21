@@ -408,6 +408,7 @@ def parsing_setup(
             out_dir,
             lst_exe=lst_exe,
             args=[out_name, ">run.log"],
+            extra_env=cfg.hpc.extra_env,
         )
         logger.info("wrote run script: %s", script_path)
     else:

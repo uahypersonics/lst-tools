@@ -480,15 +480,21 @@ class HpcConfig(_ConfigBase):
     nodes: int | None = None
     time: str | None = None
     partition: str | None = None
+    extra_env: dict[str, str] | None = None
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> HpcConfig:
         """Build an ``HpcConfig`` from a plain dict."""
+        # read extra_env as a plain dict of string key-value pairs
+        raw_env = d.get("extra_env")
+        extra_env = {str(k): str(v) for k, v in raw_env.items()} if raw_env else None
+
         return cls(
             account=_opt_str(d.get("account")),
             nodes=_opt_int(d.get("nodes")),
             time=_opt_str(d.get("time")),
             partition=_opt_str(d.get("partition")),
+            extra_env=extra_env,
         )
 
 

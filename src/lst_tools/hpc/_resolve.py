@@ -6,6 +6,9 @@ immutable and carries everything ``_templates`` needs to render a
 script.
 """
 
+# --------------------------------------------------
+# import necessary modules
+# --------------------------------------------------
 from __future__ import annotations
 
 import logging
@@ -15,6 +18,9 @@ from typing import Any
 from ._detect import DetectedEnv
 from ._profiles import Scheduler
 
+# --------------------------------------------------
+# set up logger
+# --------------------------------------------------
 logger = logging.getLogger(__name__)
 
 
@@ -43,20 +49,32 @@ class ResolvedJob:
     modules: tuple[str, ...] = ()
     fname_run_script: str | None = None
 
-    # -- convenience helpers (same surface as the old HPCcfg) ---------
+    # convenience helpers (same surface as the old HPCcfg)
     def to_dict(self) -> dict[str, Any]:
         """Return a dict of all non-``None`` fields."""
-        return {k: v for k, v in asdict(self).items() if v is not None}
 
+        # convert dataclass to dict and filter out None values
+        dict_source = asdict(self)
+        dict_out = {}
+
+        # step through all fields and only include those that are not None
+        for key, value in dict_source.items():
+            if value is not None:
+                dict_out[key] = value
+
+        # return filtered dict
+        return dict_out
+
+    # allow dict-like access with fallback to attributes
     def get(self, key: str, default: Any = None) -> Any:
         """Attribute access with a fallback, like ``dict.get``."""
         return getattr(self, key, default)
 
 
 # ------------------------------------------------------------------
-# account selection (extracted from old configure.py)
+# account selection
 # ------------------------------------------------------------------
-def _pick_best_account(
+def _select_account(
     resources: tuple[dict[str, object], ...],
 ) -> dict[str, object] | None:
     """Return the resource row with the most remaining hours."""
@@ -115,30 +133,30 @@ def resolve(
     """
     u = user_hpc or {}
 
-    # -- scheduler / launcher -----------------------------------------
+    # scheduler / launcher
     scheduler = env.scheduler
     launcher = env.launcher
 
-    # -- cpus per node ------------------------------------------------
+    # cpus per node
     ntasks_per_node = env.cpus_per_node or 1
 
-    # -- nodes --------------------------------------------------------
-    nodes: int | None = nodes_override or u.get("nodes")
+    # nodes
+    nodes: int | None = nodes_override if nodes_override is not None else u.get("nodes")
     if nodes is None and set_defaults:
         nodes = 10
 
-    # -- time ---------------------------------------------------------
-    time: float | str | None = time_override or u.get("time")
+    # time
+    time: float | str | None = time_override if time_override is not None else u.get("time")
     if time is None and set_defaults:
         time = 1.0
 
-    # -- account ------------------------------------------------------
+    # account
     account: str | None = u.get("account")
     partition: str | None = u.get("partition")
     qos: str | None = None
 
     if account is None:
-        best = _pick_best_account(env.resources)
+        best = _select_account(env.resources)
         if best is not None:
             account = best["account"]  # type: ignore[assignment]
             if best.get("partition"):
@@ -163,21 +181,21 @@ def resolve(
         if env.resources and account not in known:
             logger.warning("account '%s' not found in detected resources.", account)
 
-    # -- partition default --------------------------------------------
+    # partition default
     if partition is None:
         acct_upper = (account or "").upper()
         partition = "frontier" if "FX" in acct_upper else "standard"
 
-    # -- modules / mem_per_cpu from profile ---------------------------
+    # modules / mem_per_cpu from profile
     profile = env.profile
     modules: tuple[str, ...] = profile.modules if profile else ()
     mem_per_cpu: str | None = profile.mem_per_cpu if profile else None
 
-    # -- launcher override from profile (e.g. carpenter → aprun) ------
+    # launcher override from profile (e.g. carpenter → aprun)
     if profile is not None:
         launcher = profile.preferred_launcher
 
-    # -- run-script filename ------------------------------------------
+    # run-script filename
     if scheduler is not Scheduler.UNKNOWN:
         fname = f"run.{scheduler}.{env.hostname}"
     else:
