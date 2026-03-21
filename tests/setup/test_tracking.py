@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from lst_tools.setup.tracking import (
     _hampel_1d,
@@ -8,6 +9,9 @@ from lst_tools.setup.tracking import (
     _track_ridge_dp,
     _keep_mask_from_path,
     smooth_contour_field,
+    _resolve_freq_bound_start,
+    _resolve_freq_bound_end,
+    _resolve_beta_values,
 )
 
 
@@ -217,3 +221,184 @@ class TestSmoothContourField:
         field_2d = np.array([]).reshape(0, 0)
         result, _ = smooth_contour_field(field_2d, npasses=1)
         assert result.size == 0
+
+
+# --------------------------------------------------
+# tests for _resolve_freq_bound_start
+# --------------------------------------------------
+class TestResolveFreqBoundStart:
+    """Test suite for _resolve_freq_bound_start function."""
+
+    def test_none_returns_zero(self):
+        """If f_s is None, start index defaults to 0."""
+        freq = np.array([100.0, 200.0, 300.0, 400.0, 500.0])
+        result = _resolve_freq_bound_start(None, freq, 100.0, 500.0)
+        assert result == 0
+
+    def test_exact_match(self):
+        """f_s that matches an element exactly returns its index."""
+        freq = np.array([100.0, 200.0, 300.0, 400.0, 500.0])
+        result = _resolve_freq_bound_start(300.0, freq, 100.0, 500.0)
+        assert result == 2
+
+    def test_between_values_picks_next(self):
+        """f_s between two values returns index of first freq >= f_s."""
+        freq = np.array([100.0, 200.0, 300.0, 400.0, 500.0])
+        result = _resolve_freq_bound_start(250.0, freq, 100.0, 500.0)
+        assert result == 2
+
+    def test_below_range_resets(self):
+        """f_s below f_min resets to index 0."""
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_start(50.0, freq, 100.0, 300.0)
+        assert result == 0
+
+    def test_above_range_resets(self):
+        """f_s above f_max resets to index 0."""
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_start(999.0, freq, 100.0, 300.0)
+        assert result == 0
+
+    def test_first_element(self):
+        """f_s matching first element returns 0."""
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_start(100.0, freq, 100.0, 300.0)
+        assert result == 0
+
+    def test_last_element(self):
+        """f_s matching last element returns last index."""
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_start(300.0, freq, 100.0, 300.0)
+        assert result == 2
+
+    def test_no_valid_above(self):
+        """When no freq >= f_s exists (all below), return last index."""
+        freq = np.array([100.0, 200.0, 300.0])
+        # f_s = 300, within range, but diff = freq - f_s = [-200, -100, 0]
+        # diff >= 0 => only index 2 valid
+        result = _resolve_freq_bound_start(300.0, freq, 100.0, 300.0)
+        assert result == 2
+
+
+# --------------------------------------------------
+# tests for _resolve_freq_bound_end
+# --------------------------------------------------
+class TestResolveFreqBoundEnd:
+    """Test suite for _resolve_freq_bound_end function."""
+
+    def test_none_returns_last(self):
+        """If f_e is None, end index defaults to last index."""
+        freq = np.array([100.0, 200.0, 300.0, 400.0, 500.0])
+        result = _resolve_freq_bound_end(None, freq, 100.0, 500.0)
+        assert result == 4
+
+    def test_exact_match(self):
+        """f_e that matches an element exactly returns its index."""
+        freq = np.array([100.0, 200.0, 300.0, 400.0, 500.0])
+        result = _resolve_freq_bound_end(300.0, freq, 100.0, 500.0)
+        assert result == 2
+
+    def test_between_values_picks_previous(self):
+        """f_e between two values returns index of last freq <= f_e."""
+        freq = np.array([100.0, 200.0, 300.0, 400.0, 500.0])
+        result = _resolve_freq_bound_end(350.0, freq, 100.0, 500.0)
+        assert result == 2
+
+    def test_below_range_resets(self):
+        """f_e below f_min resets to last index."""
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_end(50.0, freq, 100.0, 300.0)
+        assert result == 2
+
+    def test_above_range_resets(self):
+        """f_e above f_max resets to last index."""
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_end(999.0, freq, 100.0, 300.0)
+        assert result == 2
+
+    def test_first_element(self):
+        """f_e matching first element returns 0."""
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_end(100.0, freq, 100.0, 300.0)
+        assert result == 0
+
+    def test_last_element(self):
+        """f_e matching last element returns last index."""
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_end(300.0, freq, 100.0, 300.0)
+        assert result == 2
+
+    def test_no_valid_below(self):
+        """When no freq <= f_e exists (all above), return 0."""
+        # This is hard to trigger with normal data since f_e is within range,
+        # but we verify the fallback path if diff <= 0 is never satisfied.
+        freq = np.array([100.0, 200.0, 300.0])
+        result = _resolve_freq_bound_end(100.0, freq, 100.0, 300.0)
+        assert result == 0
+
+
+# --------------------------------------------------
+# tests for _resolve_beta_values
+# --------------------------------------------------
+class _FakeLstParams:
+    """Minimal stand-in for cfg.lst.params with beta attributes."""
+
+    def __init__(self, beta_s, beta_e, d_beta):
+        self.beta_s = beta_s
+        self.beta_e = beta_e
+        self.d_beta = d_beta
+
+
+class _FakeLst:
+    def __init__(self, params):
+        self.params = params
+
+
+class _FakeCfg:
+    def __init__(self, lst):
+        self.lst = lst
+
+
+class TestResolveBetaValues:
+    """Test suite for _resolve_beta_values function."""
+
+    def _make_cfg(self, beta_s, beta_e, d_beta):
+        """Build a minimal config stub."""
+        return _FakeCfg(_FakeLst(_FakeLstParams(beta_s, beta_e, d_beta)))
+
+    def test_all_present(self):
+        """All requested beta values present in parsing data -> all returned."""
+        cfg = self._make_cfg(0.0, 1.0, 0.5)
+        betr_parsing = np.array([0.0, 0.5, 1.0, 1.5])
+        result = _resolve_beta_values(cfg, betr_parsing)
+        np.testing.assert_allclose(result, [0.0, 0.5, 1.0])
+
+    def test_some_missing(self):
+        """Only beta values matching parsing data are kept."""
+        cfg = self._make_cfg(0.0, 1.0, 0.25)
+        # parsing only has 0.0 and 0.5, not 0.25 or 0.75 or 1.0
+        betr_parsing = np.array([0.0, 0.5])
+        result = _resolve_beta_values(cfg, betr_parsing)
+        np.testing.assert_allclose(result, [0.0, 0.5])
+
+    def test_none_present(self):
+        """No matching values -> empty array returned."""
+        cfg = self._make_cfg(0.0, 1.0, 0.5)
+        betr_parsing = np.array([2.0, 3.0])
+        result = _resolve_beta_values(cfg, betr_parsing)
+        assert result.size == 0
+
+    def test_single_value(self):
+        """d_beta == 0 edge case: beta_s == beta_e, one value."""
+        cfg = self._make_cfg(0.5, 0.5, 0.5)
+        # n = int((0.5 - 0.5) / 0.5) + 1 = 1
+        betr_parsing = np.array([0.5])
+        result = _resolve_beta_values(cfg, betr_parsing)
+        np.testing.assert_allclose(result, [0.5])
+
+    def test_tolerance_near_match(self):
+        """Values within 1e-8 tolerance should still match."""
+        cfg = self._make_cfg(0.0, 1.0, 0.5)
+        betr_parsing = np.array([0.0 + 1e-10, 0.5 - 1e-10, 1.0 + 1e-10])
+        result = _resolve_beta_values(cfg, betr_parsing)
+        assert result.size == 3

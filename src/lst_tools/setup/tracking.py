@@ -367,7 +367,7 @@ def smooth_contour_field(
 
 
 # --------------------------------------------------
-# Phase 2: read all input data (parsing solution + baseflow)
+# read all input data (parsing solution + baseflow generated for lst code)
 # --------------------------------------------------
 def _read_input_data(
     cfg: Any,
@@ -379,12 +379,19 @@ def _read_input_data(
 
     # resolve parsing solution filename
     logger.info("get parsing solution file name")
+
+    # if no file name was provided default to "growth_rate_with_nfact_amps.dat" in the current directory
     if fname_parsing is None:
+
+        # default file name
         fname_parsing = "growth_rate_with_nfact_amps.dat"
+
         logger.info(
             "no solution file provided, using default %s...",
             fname_parsing,
         )
+
+        # not parsing solution found -> tracking cannot be set up -> raise error
         if not Path(fname_parsing).is_file():
             logger.error(
                 "default solution file %s does not exist"
@@ -720,19 +727,25 @@ def _build_and_write_case(
     else:
         cfg_tracking.lst.params.x_e = cfg.lst.params.x_s
 
-    # compute number of tracking stations from baseflow grid
+    # get start and end location for tracking from config file
     x_s = cfg_tracking.lst.params.x_s
     x_e = cfg_tracking.lst.params.x_e
+
+    # get closes indices in the baseflow station array to the start and end location for tracking
     idx_s = int(np.argmin(np.abs(data.x_baseflow - x_s)))
     idx_e = int(np.argmin(np.abs(data.x_baseflow - x_e)))
 
+    # if i_step for tracking is not set default to 1 (compute all stations between x_s and x_e)
     if cfg_tracking.lst.params.i_step is None:
         logger.warning(
             "lst.params.i_step not set in config file => default to 1"
         )
         cfg_tracking.lst.params.i_step = 1
 
+    # get the skip index for tracking from config file
     i_step = cfg_tracking.lst.params.i_step
+
+    # log user info for tracking range (only printed if --verbose/-v or higher)
     logger.info(
         "start location for tracking x_s = %s - index = %s", x_s, idx_s
     )
@@ -741,14 +754,17 @@ def _build_and_write_case(
     )
     logger.info("skip index for tracking i_step = %s", i_step)
 
+    # compute number of stations that will be computed for tracking
     n_stations_tracking = int((abs(idx_s - idx_e) + 1) / i_step)
+
+    # sanity check: ensure at least one station will be computed for tracking
     if n_stations_tracking < 1:
-        logger.warning(
-            "computed 0 tracking stations (idx_s=%s, idx_e=%s, i_step=%s) "
-            "— check x_s/x_e in config; defaulting to 1 node",
-            idx_s, idx_e, i_step,
+        raise ValueError(
+            f"computed 0 tracking stations (idx_s={idx_s}, idx_e={idx_e},"
+            f" i_step={i_step}) — check x_s/x_e and i_step in config"
         )
-        n_stations_tracking = max(n_stations_tracking, 1)
+
+    # user info: ouptut the number of stations to be computed for tracking (only printed if --verbose/-v or higher)
     logger.info(
         "number of stations to be computed for tracking = %s",
         n_stations_tracking,
@@ -768,6 +784,9 @@ def _build_and_write_case(
     env = detect()
     ntasks_per_node = env.cpus_per_node or 1
     nodes_optimal = max(1, n_stations_tracking // ntasks_per_node)
+
+    # user info (only printed if --verbose/-v or higher)
+    logger.info("number of nodes requested by user config: %s", cfg.hpc.nodes)
 
     user_hpc = (
         cfg.to_dict().get("hpc", {})

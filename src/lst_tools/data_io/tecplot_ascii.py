@@ -482,9 +482,6 @@ def _read_plain_ascii(
 # --------------------------------------------------
 # main function to read tecplot ascii file
 # --------------------------------------------------
-
-
-
 def read_tecplot_ascii(path: str | Path) -> TecplotData:
     
     """
@@ -497,13 +494,11 @@ def read_tecplot_ascii(path: str | Path) -> TecplotData:
     # --------------------------------------------------
     # store path in p for convenience -> also typecasting to path object providing useful methods
     # --------------------------------------------------
-    
     p = Path(path)
     
     # --------------------------------------------------
     # some sanity checks
     # --------------------------------------------------
-    
     if p.suffix.lower() not in {".dat", ".plt", ".tec"}:
         
         logger.warning("File extension '%s' not recognized as tecplot ascii (.dat, .plt, .tec)", p.suffix)
