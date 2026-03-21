@@ -398,6 +398,7 @@ class LstParams(_ConfigBase):
     x_s: float | None = None
     x_e: float | None = None
     i_step: int | None = None
+    tracking_dir: int = 1  # 0 = downstream, 1 = upstream
     f_min: float | None = None
     f_max: float | None = None
     d_f: float | None = None
@@ -422,6 +423,8 @@ class LstParams(_ConfigBase):
                 kw[f.name] = int(v) if v is not None else f.default
             elif f.name in ("i_step",):
                 kw[f.name] = _opt_int(v)
+            elif f.name == "tracking_dir":
+                kw[f.name] = int(v) if v is not None else 1
             else:
                 kw[f.name] = _opt_float(v)
         return cls(**kw)

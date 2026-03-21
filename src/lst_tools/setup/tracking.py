@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import logging
 from pathlib import Path
-from typing import Any, Mapping, NamedTuple
+from typing import Any, Mapping
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
@@ -95,19 +95,7 @@ def auto_fill_tracking(cfg: Any, *, force: bool = False, cfg_path: str | Path | 
     return changed
 
 
-class _TrackingData(NamedTuple):
-    """Bundle of arrays loaded from the parsing solution and baseflow."""
 
-    tp: Any                         # TecplotData object
-    x: np.ndarray                   # streamwise coordinates (1-D)
-    freq_line: np.ndarray           # frequency array (1-D)
-    betr_parsing: np.ndarray        # available beta values (1-D)
-    x_baseflow: np.ndarray | None   # baseflow station x-locations (1-D)
-    uvel_inf: float | None          # freestream velocity
-    x_min: float                    # min streamwise coordinate
-    x_max: float                    # max streamwise coordinate
-    f_min: float                    # min frequency
-    f_max: float                    # max frequency
 
 
 
@@ -367,89 +355,33 @@ def smooth_contour_field(
 
 
 # --------------------------------------------------
-# read all input data (parsing solution + baseflow generated for lst code)
+# read parsing solution (Tecplot ASCII)
 # --------------------------------------------------
-def _read_input_data(
-    cfg: Any,
-    fname_parsing: str | None,
-) -> _TrackingData:
-    """Read the parsing Tecplot solution and baseflow binary; return bundled arrays."""
-    uvel_inf = cfg.flow_conditions.uvel_inf
-    logger.info("uvel_inf = %s", uvel_inf)
+def _read_parsing_solution(fname: str | None) -> Any:
+    """Resolve filename and read the parsing Tecplot solution."""
 
-    # resolve parsing solution filename
-    logger.info("get parsing solution file name")
-
-    # if no file name was provided default to "growth_rate_with_nfact_amps.dat" in the current directory
-    if fname_parsing is None:
-
+    # check if a filename was provided; if not, use the default and check it exists
+    if fname is None:
         # default file name
-        fname_parsing = "growth_rate_with_nfact_amps.dat"
+        fname = "growth_rate_with_nfact_amps.dat"
+        
+        logger.info("no solution file provided, using default %s...", fname)
 
-        logger.info(
-            "no solution file provided, using default %s...",
-            fname_parsing,
-        )
-
-        # not parsing solution found -> tracking cannot be set up -> raise error
-        if not Path(fname_parsing).is_file():
+        # check if the default file exists; if not, raise an error
+        if not Path(fname).is_file():
             logger.error(
                 "default solution file %s does not exist"
                 " and no other file was provided"
                 " -> abort tracking setup",
-                fname_parsing,
+                fname,
             )
             raise FileNotFoundError(
-                f"parsing solution file not found: {fname_parsing}"
+                f"parsing solution file not found: {fname}"
             )
 
-    # read baseflow binary (if available)
-    baseflow_input = cfg.lst.io.baseflow_input
-    x_baseflow: np.ndarray | None = None
-
-    if baseflow_input is not None:
-        baseflow_input = Path(str(baseflow_input))
-
-    if baseflow_input is not None and baseflow_input.is_file():
-        x_baseflow = read_baseflow_stations(baseflow_input)
-
-    # read Tecplot parsing solution
     logger.info("read parsing solution")
-    tp = read_tecplot_ascii(fname_parsing)
 
-    # extract coordinate arrays
-    x_field = tp.field("s")
-    x_min = float(x_field.min())
-    x_max = float(x_field.max())
-    logger.info("x_min = %s, x_max = %s", x_min, x_max)
-    x = x_field[0, 0, :]
-
-    freq_line = tp.field("freq")[0, :, 0]
-    f_min = float(freq_line.min())
-    f_max = float(freq_line.max())
-    logger.info("f_min = %s, f_max = %s", f_min, f_max)
-
-    betr_field = tp.field("beta")
-    logger.info(
-        "betr_min = %s, betr_max = %s", betr_field.min(), betr_field.max()
-    )
-    betr_parsing = betr_field[:, 0, 0]
-    logger.info("available betr values from parsing: ")
-    for val in betr_parsing:
-        logger.info("  %10.4f", val)
-
-    return _TrackingData(
-        tp=tp,
-        x=x,
-        freq_line=freq_line,
-        betr_parsing=betr_parsing,
-        x_baseflow=x_baseflow,
-        uvel_inf=uvel_inf,
-        x_min=x_min,
-        x_max=x_max,
-        f_min=f_min,
-        f_max=f_max,
-    )
+    return read_tecplot_ascii(fname)
 
 
 # --------------------------------------------------
@@ -562,29 +494,29 @@ def _resolve_freq_bound_end(
 # find initial guess for tracking 
 # --------------------------------------------------
 def _find_initial_guess(
-    data: _TrackingData,
+    tp: Any,
+    x_ini: float,
     idx_betr: int,
     cfg: Any,
-    betr_loc: float,
     debug_path: Path | str | None,
 ) -> dict[str, Any]:
     """Smooth the alpha_i contour, resolve frequency bounds, and walk
-    upstream to find the most-unstable initial eigenvalue guess.
+    along the tracking direction to find the most-unstable initial eigenvalue guess.
     """
-    tp = data.tp
-    x = data.x
-    freq_line = data.freq_line
 
-    # extract 2-D fields for this beta index
+    # get x locations from parsing solution
+    x = tp.field("s")[0, 0, :]
+    n_x = x.size
+    # get frequencies from parsing solution
+    freq_line = tp.field("freq")[0, :, 0]
+    # get freestream velocity from config file
+    uvel_inf = cfg.flow_conditions.uvel_inf
+    # get beta value for this case from parsing solution
+    betr_loc = float(tp.field("beta")[idx_betr, 0, 0])
+
+    # extract 2-D fields for given beta index
     alpi_2d = tp.field("alpi")[idx_betr, :, :]
     alpr_2d = tp.field("alpr")[idx_betr, :, :]
-
-    eps = 1e-12
-    cphx_2d = (
-        (2.0 * np.pi * freq_line[:, None])
-        / np.clip(alpr_2d, eps, None)
-        / data.uvel_inf
-    )
 
     # smooth the contour field
     alpi_2d_smoothed, keep_mask = smooth_contour_field(alpi_2d, npasses=5)
@@ -598,6 +530,14 @@ def _find_initial_guess(
         x_2d = np.broadcast_to(x[None, :], (nj, ni)).copy()
         freq_2d = np.broadcast_to(freq_1d[:, None], (nj, ni)).copy()
         km_2d = keep_mask.astype(float)
+
+        # compute non-dimensional phase speed: c_ph,x / U_inf = omega / (alpha_r * U_inf)
+        eps = 1e-12
+        cphx_2d = (
+            (2.0 * np.pi * freq_line[:, None])
+            / np.clip(alpr_2d, eps, None)
+            / uvel_inf
+        )
 
         from lst_tools.data_io.tecplot_ascii import write_tecplot_ascii
 
@@ -615,14 +555,7 @@ def _find_initial_guess(
             fmt=".6e",
         )
 
-    # resolve initial x-location
-    if cfg.lst.params.x_e is None:
-        logger.warning("no x_e location provided for tracking")
-        logger.warning("set x_e to x_max = %s", data.x_max)
-        x_ini = data.x_max
-    else:
-        x_ini = cfg.lst.params.x_e
-
+    # clamp x_ini to available range
     if x_ini > x[-1]:
         logger.warning(
             "x_ini = %s exceeds maximum available x = %s -> reset to x_max",
@@ -630,21 +563,40 @@ def _find_initial_guess(
             x[-1],
         )
         x_ini = float(x[-1])
+    
+    if x_ini < x[0]:
+        logger.warning(
+            "x_ini = %s below minimum available x = %s -> reset to x_min",
+            x_ini,
+            x[0],
+        )
+        x_ini = float(x[0])
 
-    idx_ini = int((x >= x_ini).nonzero()[0][0])
+    # find index of first x station >= x_ini
+    idx_ini = int(np.searchsorted(x, x_ini))
 
     # resolve frequency search range
+    freq_min = float(freq_line.min())
+    freq_max = float(freq_line.max())
     idf_s = _resolve_freq_bound_start(
-        cfg.lst.params.f_min, freq_line, data.f_min, data.f_max
+        cfg.lst.params.f_min, freq_line, freq_min, freq_max
     )
     idf_e = _resolve_freq_bound_end(
-        cfg.lst.params.f_max, freq_line, data.f_min, data.f_max
+        cfg.lst.params.f_max, freq_line, freq_min, freq_max
     )
 
-    # walk upstream to find an unstable initial guess
+    # walk along tracking direction to find an unstable initial guess
     idx_x = idx_ini
-    back_step = 5
-    best: dict[str, Any] = {
+    step = 5
+
+    if cfg.lst.params.tracking_dir == 0:
+        # downstream: walk forward
+        step_dir = step
+    else:
+        # upstream (default): walk backward
+        step_dir = -step
+    
+    initial_guess: dict[str, Any] = {
         "idx_x": None,
         "idx_f": None,
         "alpi": None,
@@ -652,46 +604,47 @@ def _find_initial_guess(
         "freq": None,
     }
 
-    while idx_x >= 0:
+    # keep modyfing idx_x within bounds of available data until we find a positive alpi value (unstable) or exhaust the search range
+    while 0 <= idx_x < n_x:
         alpi_line = alpi_2d[idf_s:idf_e, idx_x]
         j_idx_local = int(np.argmax(alpi_line))
         j_idx_global = idf_s + j_idx_local
         if alpi_line[j_idx_local] > 0.0:
-            best["idx_x"] = idx_x
-            best["idx_f"] = j_idx_global
-            best["alpi"] = float(alpi_2d[j_idx_global, idx_x])
-            best["alpr"] = float(alpr_2d[j_idx_global, idx_x])
-            best["freq"] = float(freq_line[j_idx_global])
+            initial_guess["idx_x"] = idx_x
+            initial_guess["idx_f"] = j_idx_global
+            initial_guess["alpi"] = float(alpi_2d[j_idx_global, idx_x])
+            initial_guess["alpr"] = float(alpr_2d[j_idx_global, idx_x])
+            initial_guess["freq"] = float(freq_line[j_idx_global])
             break
         else:
-            idx_x -= back_step
+            idx_x += step_dir
 
     # fallback: use the initial station
-    if best["idx_x"] is None:
+    if initial_guess["idx_x"] is None:
         idx_x = idx_ini
         alpi_line = alpi_2d[idf_s:idf_e, idx_x]
         j_idx_local = int(np.argmax(alpi_line))
         j_idx_global = idf_s + j_idx_local
-        best["idx_x"] = idx_x
-        best["idx_f"] = j_idx_global
-        best["alpi"] = float(alpi_2d[j_idx_global, idx_x])
-        best["alpr"] = float(alpr_2d[j_idx_global, idx_x])
-        best["freq"] = float(freq_line[j_idx_global])
+        initial_guess["idx_x"] = idx_x
+        initial_guess["idx_f"] = j_idx_global
+        initial_guess["alpi"] = float(alpi_2d[j_idx_global, idx_x])
+        initial_guess["alpr"] = float(alpr_2d[j_idx_global, idx_x])
+        initial_guess["freq"] = float(freq_line[j_idx_global])
 
     logger.info(
         "initial guess at x-index %s (x = %.6f)",
-        best["idx_x"],
-        float(x[best["idx_x"]]),
+        initial_guess["idx_x"],
+        float(x[initial_guess["idx_x"]]),
     )
     logger.info(
         "beta=%.6f, f=%.6f, alpr=%.6e, alpi=%.6e",
         float(betr_loc),
-        best["freq"],
-        best["alpr"],
-        best["alpi"],
+        initial_guess["freq"],
+        initial_guess["alpr"],
+        initial_guess["alpi"],
     )
 
-    return best
+    return initial_guess
 
 
 # --------------------------------------------------
@@ -700,58 +653,57 @@ def _find_initial_guess(
 def _build_and_write_case(
     dir_name: str,
     cfg: Any,
-    best: dict[str, Any],
+    initial_guess: dict[str, Any],
     betr_loc: float,
-    data: _TrackingData,
+    tp: Any,
+    x_baseflow: np.ndarray,
     lst_exe: str | None,
 ) -> Any:
     """Deep-copy config with tracking overrides, write input deck and HPC
     script.  Returns the resolved HPC config.
     """
-    x = data.x
+    x = tp.field("s")[0, 0, :]
 
     cfg_tracking = copy.deepcopy(cfg)
 
     # initial conditions
-    cfg_tracking.lst.params.f_init = best["freq"]
-    cfg_tracking.lst.params.alpha_0 = complex(best["alpr"], -best["alpi"])
+    cfg_tracking.lst.params.f_init = initial_guess["freq"]
+    cfg_tracking.lst.params.alpha_0 = complex(initial_guess["alpr"], -initial_guess["alpi"])
 
     # solver settings
     cfg_tracking.lst.solver.type = 2
     cfg_tracking.lst.solver.is_simplified = False
 
-    # x-range
-    cfg_tracking.lst.params.x_s = float(x[best["idx_x"]])
+    # get start and end location for tracking from config file or default to baseflow range if not provided
     if cfg.lst.params.x_s is None:
-        cfg_tracking.lst.params.x_e = data.x_min
+        x_s = float(x_baseflow.min())
+        logger.warning("x_s not set in config => default to x_min (meanflow.bin) = %s", x_s)
     else:
-        cfg_tracking.lst.params.x_e = cfg.lst.params.x_s
+        x_s = cfg.lst.params.x_s
 
-    # get start and end location for tracking from config file
-    x_s = cfg_tracking.lst.params.x_s
-    x_e = cfg_tracking.lst.params.x_e
+    if cfg.lst.params.x_e is None:
+        x_e = float(x_baseflow.max())
+        logger.warning("x_e not set in config => default to x_max (meanflow.bin) = %s", x_e)
+    else:
+        x_e = cfg.lst.params.x_e
 
-    # get closes indices in the baseflow station array to the start and end location for tracking
-    idx_s = int(np.argmin(np.abs(data.x_baseflow - x_s)))
-    idx_e = int(np.argmin(np.abs(data.x_baseflow - x_e)))
+    # compute closest index in x_baseflow for x_s and x_e (tracking will be performed between these indices)
+    idx_s = int(np.argmin(np.abs(x_baseflow - x_s)))
+    idx_e = int(np.argmin(np.abs(x_baseflow - x_e)))
 
     # if i_step for tracking is not set default to 1 (compute all stations between x_s and x_e)
-    if cfg_tracking.lst.params.i_step is None:
-        logger.warning(
-            "lst.params.i_step not set in config file => default to 1"
-        )
-        cfg_tracking.lst.params.i_step = 1
-
-    # get the skip index for tracking from config file
-    i_step = cfg_tracking.lst.params.i_step
+    if cfg.lst.params.i_step is None:
+        i_step = 1
+        logger.warning("i_step not set in config => default to %s", i_step)
+    else:
+        i_step = cfg.lst.params.i_step
 
     # log user info for tracking range (only printed if --verbose/-v or higher)
     logger.info(
-        "start location for tracking x_s = %s - index = %s", x_s, idx_s
+        "tracking x-range: x_s = %s (index %s) -> x_e = %s (index %s)",
+        x_s, idx_s, x_e, idx_e,
     )
-    logger.info(
-        "end location for tracking x_e = %s - index = %s", x_e, idx_e
-    )
+
     logger.info("skip index for tracking i_step = %s", i_step)
 
     # compute number of stations that will be computed for tracking
@@ -776,8 +728,21 @@ def _build_and_write_case(
     cfg_tracking.lst.params.d_beta = 0
     cfg_tracking.lst.params.beta_init = betr_loc
 
-    # generate LST input deck
+    # set tracking x-range: one end keeps the user value, the other is
+    # overridden to the initial-guess location
+    x_ig = float(x[initial_guess["idx_x"]])
+    if cfg.lst.params.tracking_dir == 0:
+        # downstream: initial guess at x_s, track toward x_e
+        cfg_tracking.lst.params.x_s = x_ig
+        cfg_tracking.lst.params.x_e = x_e
+    else:
+        # upstream (default): initial guess at x_e, track toward x_s
+        cfg_tracking.lst.params.x_s = x_s
+        cfg_tracking.lst.params.x_e = x_ig
+
+    # generate LST input deck (renderer handles the x_s/x_e -> x_min/x_max mapping)
     out_path = Path(dir_name) / "lst_input.dat"
+
     generate_lst_input_deck(out_path=out_path, cfg=cfg_tracking)
 
     # generate HPC run script
@@ -868,40 +833,84 @@ def tracking_setup(
 
     Pipeline
     --------
-    1. Resolve and validate configuration
-    2. Auto-fill unset sweep parameters (if requested)
-    3. Read parsing solution and baseflow data
-    4. Determine beta values to track
-    5. For each beta: scaffold directory, find initial guess,
-       write input deck and HPC script
-    6. Write a launcher script to submit all jobs
+    - Resolve and validate configuration
+    - Auto-fill unset sweep parameters (if requested)
+    - Read parsing solution and baseflow data
+    - Determine beta values to track
+    - For each beta: scaffold directory, find initial guess,
+      write input deck and HPC script
+    - Write a launcher script to submit all jobs
     """
 
     # info output (only printed if --verbose/-v or higher)
     logger.info("setting up tracking step ...")
 
+    # load and validate config file
     cfg = resolve_config(cfg)
+
+    # theta_deg is a required input in the lst_input.dat file -> set to 0 if not needed
     if cfg.geometry.theta_deg is None:
         cfg.geometry.theta_deg = 0.0
 
+    # auto-fill any missing tracking parameters and write to config file (if requested)
     if auto_fill:
         auto_fill_tracking(cfg, force=force, cfg_path=cfg_path)
 
-    data = _read_input_data(cfg, fname_parsing)
-    betr = _resolve_beta_values(cfg, data.betr_parsing)
+    # read parsing solution
+    tp = _read_parsing_solution(fname_parsing)
+
+    # get baseflow file name (default meanflow.bin)
+    fname_baseflow = cfg.lst.io.baseflow_input
+
+    # initialize baseflow stations to None; if the file exists, read it and extract the station locations in x
+    x_baseflow = None
+    if fname_baseflow is not None and Path(str(fname_baseflow)).is_file():
+        x_baseflow = read_baseflow_stations(fname_baseflow)
+
+    betr_parsing = tp.field("beta")[:, 0, 0]
+    betr = _resolve_beta_values(cfg, betr_parsing)
+
+    # determine initial guess location based on tracking direction
+    x_parsing = tp.field("s")[0, 0, :]
+    if cfg.lst.params.tracking_dir == 0:
+        # downstream: start search from x_s (or parsing x_min as fallback)
+        x_ini = cfg.lst.params.x_s if cfg.lst.params.x_s is not None else float(x_parsing.min())
+    else:
+        # upstream (default): start search from x_e (or parsing x_max as fallback)
+        x_ini = cfg.lst.params.x_e if cfg.lst.params.x_e is not None else float(x_parsing.max())
 
     logger.info("begin tracking setup...")
 
+    # initialize a list to keep track of created directories for the launcher script
     created_dirs: list[str] = []
+
+    # initialize hpc_cfg to None; it will be set in the loop and returned at the end (assuming at least one beta value is processed)
     hpc_cfg = None
 
+    # loop over beta values, set up case directories, find initial guesses, and write input decks and HPC scripts
     for betr_loc in betr:
-        idx_betr = int(np.argmin(np.abs(data.betr_parsing - betr_loc)))
+
+        # get the closest index in the parsing solution to the current beta value; this is the index of the 2D alpi and alpr fields that will be used for the tracking initial guess
+        idx_betr = int(np.argmin(np.abs(betr_parsing - betr_loc)))
+
+        # scaffold case directory and copy files
+        # - get the path to the LST executable from the config (if set) for use in the HPC script generation
+        # - store the created directory name for the launcher script
         dir_name, lst_exe = _setup_case_directory(betr_loc, cfg)
+
+        # store the created directory name for the launcher script
         created_dirs.append(dir_name)
-        best = _find_initial_guess(data, idx_betr, cfg, betr_loc, debug_path)
+
+        # find the initial guess for tracking using the following logic:
+        # - smoothe the alpha_i contour
+        # - resolve frequency bounds
+        # - walk upstream to find the most unstable point
+        # This returns a dictionary with the initial_guess idx_x, idx_f, alpi, alpr, and freq
+        initial_guess = _find_initial_guess(tp, x_ini, idx_betr, cfg, debug_path)
+
+        # build the tracking config for this beta, write the input deck, and generate the HPC script for this case
         hpc_cfg = _build_and_write_case(
-            dir_name, cfg, best, betr_loc, data, lst_exe,
+            dir_name, cfg, initial_guess, betr_loc, tp, x_baseflow, lst_exe,
         )
 
     if hpc_cfg is None:

@@ -204,10 +204,18 @@ def generate_lst_input_deck(
     add("Space sweep parameters")
     add("----------------------")
 
-    vals = f"{_fmt_f(cfg.lst.params.x_s, 20, 10)}"
+    # tracking_dir: 0 = downstream (x_s -> x_e), 1 = upstream (x_e -> x_s)
+    if cfg.lst.params.tracking_dir == 0:
+        x_min = cfg.lst.params.x_s
+        x_max = cfg.lst.params.x_e
+    else:
+        x_min = cfg.lst.params.x_e
+        x_max = cfg.lst.params.x_s
+
+    vals = f"{_fmt_f(x_min, 20, 10)}"
     add(_fmt_with_comment(vals, "Start x location for tracking (x_min)"))
 
-    vals = f"{_fmt_f(cfg.lst.params.x_e, 20, 10)}"
+    vals = f"{_fmt_f(x_max, 20, 10)}"
     add(_fmt_with_comment(vals, "End x location for tracking (x_max)"))
 
     vals = f"{_fmt_i(cfg.lst.params.i_step, 6)}"

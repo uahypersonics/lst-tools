@@ -17,7 +17,7 @@ from typing import Annotated, Optional
 
 import numpy as np
 import typer
-from cfd_io import read_file as cfd_read_file
+from cfd_io import StructuredGrid, read_file as cfd_read_file
 
 from lst_tools.config import read_config
 from lst_tools.convert import convert_meanflow
@@ -46,26 +46,34 @@ def _to_2d(arr: np.ndarray, name: str) -> np.ndarray:
     raise ValueError(f"{name}: expected 2-D or 3-D array, got {a.shape}")
 
 
-def _load_with_cfd_io(path: Path) -> tuple[Grid, Flow, dict]:
+def _load_with_cfd_io(fpath: Path) -> tuple[Grid, Flow, dict]:
     """Read grid/flow via cfd-io and map into lst-tools core containers.
 
     lst-tools uses (ny, nx) layout.  The data orientation is detected
     by checking whether x[0,0] < x[0,-1] (streamwise increases along
     axis 1).  If not, the arrays are transposed.
     """
-    grid_raw, flow_raw, attrs = cfd_read_file(path)
+    ds = cfd_read_file(fpath)
+    grid_raw = ds.grid
+    flow_raw = ds.flow
+    attrs = ds.attrs or {}
 
-    if grid_raw is None or flow_raw is None:
-        raise ValueError("cfd-io returned empty grid or flow")
+    if not isinstance(grid_raw, StructuredGrid):
+        raise TypeError(
+            f"lastrac requires a structured grid, got {type(grid_raw).__name__}"
+        )
 
     # get 2-D arrays before deciding on orientation
-    x = _to_2d(grid_raw["x"], "grid/x")
-    y = _to_2d(grid_raw["y"], "grid/y")
+    x = _to_2d(grid_raw.x, "grid/x")
+    y = _to_2d(grid_raw.y, "grid/y")
 
     # determine orientation: in (ny, nx) convention, x[0,:] spans the
     # streamwise direction so x[0,0] < x[0,-1].  If the opposite is
     # true, the data is (nx, ny) and needs to be transposed.
     do_transpose = x[0, 0] >= x[0, -1]
+
+    logger.debug("%f %f -> do_transpose = %s", x[0, 0], x[0, -1], do_transpose)
+
     if do_transpose:
         logger.debug("transposing arrays from (nx, ny) to (ny, nx)")
         x = x.T
@@ -75,29 +83,27 @@ def _load_with_cfd_io(path: Path) -> tuple[Grid, Flow, dict]:
 
     # z is optional for 2-D LST setup; keep if present
     z = None
-    if "z" in grid_raw:
-        z = _to_2d(grid_raw["z"], "grid/z")
+    if grid_raw.z is not None:
+        z = _to_2d(grid_raw.z, "grid/z")
         if do_transpose:
             z = z.T
 
-    grid = Grid(x=x, y=y, z=z, attrs=attrs or {})
+    grid = Grid(x=x, y=y, z=z, attrs=attrs)
 
     # initialize fields dict and convert flow arrays to 2-D planes, transposing if needed
     fields: dict[str, np.ndarray] = {}
 
     # loop over all flow variables returned by cfd-io; convert to 2-D planes and transpose if needed
     for key, val in flow_raw.items():
-        arr = np.asarray(val)
+        arr = np.asarray(val.data if hasattr(val, "data") else val)
         if arr.ndim in (2, 3):
             field = _to_2d(arr, f"flow/{key}")
-            # transpose if needed
             if do_transpose:
                 field = field.T
-            # store in fields dict
             fields[key] = field
 
-    flow = Flow(grid=grid, fields=fields, attrs=attrs or {})
-    return grid, flow, attrs or {}
+    flow = Flow(grid=grid, fields=fields, attrs=attrs)
+    return grid, flow, attrs
 
 
 # --------------------------------------------------
