@@ -499,6 +499,7 @@ def _find_initial_guess(
     idx_betr: int,
     cfg: Any,
     debug_path: Path | str | None,
+    finit: float | None = None,
 ) -> dict[str, Any]:
     """Smooth the alpha_i contour, resolve frequency bounds, and walk
     along the tracking direction to find the most-unstable initial eigenvalue guess.
@@ -574,6 +575,37 @@ def _find_initial_guess(
 
     # find index of first x station >= x_ini
     idx_ini = int(np.searchsorted(x, x_ini))
+
+    # if finit is specified, use that frequency directly instead of searching for max alpha_i
+    if finit is not None:
+        idx_f = int(np.argmin(np.abs(freq_line - finit)))
+        logger.info(
+            "using prescribed finit = %.1f Hz (nearest frequency = %.1f Hz)",
+            finit,
+            float(freq_line[idx_f]),
+        )
+        initial_guess: dict[str, Any] = {
+            "idx_x": idx_ini,
+            "idx_f": idx_f,
+            "alpi": float(alpi_2d[idx_f, idx_ini]),
+            "alpr": float(alpr_2d[idx_f, idx_ini]),
+            "freq": float(freq_line[idx_f]),
+        }
+
+        logger.info(
+            "initial guess at x-index %s (x = %.6f)",
+            initial_guess["idx_x"],
+            float(x[initial_guess["idx_x"]]),
+        )
+        logger.info(
+            "beta=%.6f, f=%.6f, alpr=%.6e, alpi=%.6e",
+            betr_loc,
+            initial_guess["freq"],
+            initial_guess["alpr"],
+            initial_guess["alpi"],
+        )
+
+        return initial_guess
 
     # resolve frequency search range
     freq_min = float(freq_line.min())
@@ -828,6 +860,7 @@ def tracking_setup(
     auto_fill: bool = False,
     force: bool = False,
     cfg_path: str | Path | None = None,
+    finit: float | None = None,
 ) -> Path:
     """Set up eigenvalue tracking cases for all requested beta values.
 
@@ -906,7 +939,7 @@ def tracking_setup(
         # - resolve frequency bounds
         # - walk upstream to find the most unstable point
         # This returns a dictionary with the initial_guess idx_x, idx_f, alpi, alpr, and freq
-        initial_guess = _find_initial_guess(tp, x_ini, idx_betr, cfg, debug_path)
+        initial_guess = _find_initial_guess(tp, x_ini, idx_betr, cfg, debug_path, finit=finit)
 
         # build the tracking config for this beta, write the input deck, and generate the HPC script for this case
         hpc_cfg = _build_and_write_case(

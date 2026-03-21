@@ -45,6 +45,13 @@ def cmd_tracking(
             help="Force overwrite of existing parameter values when used with --auto-fill.",
         ),
     ] = False,
+    finit: Annotated[
+        Optional[float],
+        typer.Option(
+            "--finit",
+            help="Fix the initialization frequency (Hz) instead of auto-detecting from max alpha_i.",
+        ),
+    ] = None,
 ) -> None:
     """Set up tracking step for the LST solver (requires a solution from the parsing step).
 \f
@@ -86,6 +93,7 @@ def cmd_tracking(
             auto_fill=auto_fill,
             force=force,
             cfg_path=resolved_cfg_path,
+            finit=finit,
         )
 
         typer.echo("tracking setup complete")

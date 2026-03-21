@@ -18,6 +18,7 @@ from typing import Annotated
 
 import typer
 
+from .cmd_clean import cmd_clean_parsing, cmd_clean_spectra, cmd_clean_tracking
 from .cmd_hpc import cmd_hpc
 from .cmd_info import cmd_info
 from .cmd_init import cmd_init
@@ -63,6 +64,11 @@ setup_app = typer.Typer(
 
 process_app = typer.Typer(
     help="Postprocess LST results (tracking, spectra).",
+    cls=_OrderedGroup,
+)
+
+clean_app = typer.Typer(
+    help="Remove generated files (parsing, tracking, spectra).",
     cls=_OrderedGroup,
 )
 
@@ -144,6 +150,7 @@ def _main(
 # --------------------------------------------------
 cli.command(name="init")(cmd_init)
 cli.add_typer(setup_app, name="setup")
+cli.add_typer(clean_app, name="clean")
 cli.command(name="info")(cmd_info)
 cli.command(name="lastrac")(cmd_lastrac)
 cli.add_typer(process_app, name="process")
@@ -157,6 +164,11 @@ setup_app.command(name="spectra")(cmd_spectra)
 # process subcommands
 process_app.command(name="tracking")(cmd_tracking_process)
 process_app.command(name="spectra")(cmd_spectra_process)
+
+# clean subcommands
+clean_app.command(name="parsing")(cmd_clean_parsing)
+clean_app.command(name="tracking")(cmd_clean_tracking)
+clean_app.command(name="spectra")(cmd_clean_spectra)
 
 
 # --------------------------------------------------

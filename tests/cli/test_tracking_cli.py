@@ -32,7 +32,7 @@ class TestTrackingCLI:
         result = runner.invoke(cli, ["setup", "tracking"])
         assert result.exit_code == 0
         mock_read_config.assert_called_once_with(path=None)
-        mock_tracking_setup.assert_called_once_with(cfg=mock_cfg, debug_path=None, auto_fill=False, force=False, cfg_path=None)
+        mock_tracking_setup.assert_called_once_with(cfg=mock_cfg, debug_path=None, auto_fill=False, force=False, cfg_path=None, finit=None)
 
     @patch("lst_tools.cli.cmd_tracking.tracking_setup")
     @patch("lst_tools.cli.cmd_tracking.read_config")
