@@ -4,6 +4,9 @@ Reads a parsing solution, identifies frequency peaks, and generates
 per-station input decks and HPC job scripts for the tracking step.
 """
 
+# --------------------------------------------------
+# import necessary modules
+# --------------------------------------------------
 from __future__ import annotations
 
 import copy
@@ -28,6 +31,9 @@ from ._common import (
     write_launcher_script,
 )
 
+# --------------------------------------------------
+# set up logger
+# --------------------------------------------------
 logger = logging.getLogger(__name__)
 
 
