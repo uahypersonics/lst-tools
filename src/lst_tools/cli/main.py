@@ -83,12 +83,16 @@ def _main(
     version: Annotated[
         bool | None,
         typer.Option(
-            "--version", "-v",
+            "--version", "-V",
             help="Show version and exit.",
             callback=_version_callback,
             is_eager=True,
         ),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable informational output."),
+    ] = False,
     debug: Annotated[
         bool,
         typer.Option("--debug", "-d", help="Enable debug output."),
@@ -100,19 +104,19 @@ def _main(
     ctx.ensure_object(dict)
     ctx.obj["debug"] = debug
 
-    # if debug mode is active, set up debug logging for lst_tools modules
+    # determine the effective log level
     if debug:
+        level = logging.DEBUG
+    elif verbose:
+        level = logging.INFO
+    else:
+        level = None
 
-        # get the package-level logger ("lst_tools") — this is the parent
-        # of every logger in the codebase (e.g. "lst_tools.setup.spectra",
-        # "lst_tools.config.read_config", etc.).  setting its level to DEBUG
-        # enables debug output for the entire package at once, because
-        # child loggers propagate messages up to their parent.
+    if level is not None:
         lst_logger = logging.getLogger("lst_tools")
-        # set all loggers in the package to DEBUG level
-        lst_logger.setLevel(logging.DEBUG)
+        lst_logger.setLevel(level)
 
-        # attach a handler that prints to stderr so debug messages are
+        # attach a handler that prints to stderr so log messages are
         # visible in the terminal.
         # the guard prevents adding duplicate handlers if this callback runs more than once
         # (NullHandler from __init__.py is always present, so check for StreamHandler)
@@ -123,7 +127,7 @@ def _main(
         )
         if not has_stream_handler:
             handler = logging.StreamHandler(sys.stderr)
-            handler.setLevel(logging.DEBUG)
+            handler.setLevel(level)
             handler.setFormatter(
                 logging.Formatter("[%(levelname)-7s] %(name)s: %(message)s")
             )

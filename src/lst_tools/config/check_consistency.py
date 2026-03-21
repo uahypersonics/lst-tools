@@ -296,6 +296,36 @@ def _check_geometry_type_vs_generalized(cfg: dict[str, Any]) -> Iterable[Issue]:
     return issues
 
 
+@register_check("tracking_geometry")
+def _check_tracking_geometry(cfg: dict[str, Any]) -> Iterable[Issue]:
+    """Validate that cone geometries have theta_deg set (required for tracking)."""
+    issues: list[Issue] = []
+
+    geometry_type = get(cfg, "geometry.type")
+    theta_deg = get(cfg, "geometry.theta_deg")
+
+    if theta_deg is None and geometry_type == 2:
+        issues.append(
+            Issue(
+                level=IssueLevel.ERROR,
+                path="geometry.theta_deg",
+                message="theta_deg is required for cone geometries (geometry.type=2) but is not set",
+                hint="set geometry.theta_deg in the configuration file",
+            )
+        )
+    elif theta_deg is None and geometry_type is not None:
+        issues.append(
+            Issue(
+                level=IssueLevel.WARNING,
+                path="geometry.theta_deg",
+                message=f"theta_deg not set for geometry type {geometry_type}; will default to 0",
+                hint="set geometry.theta_deg if a non-zero half-angle is needed",
+            )
+        )
+
+    return issues
+
+
 # --------------------------------------------------
 # check consistency function: sanity checks for select config parameters
 # --------------------------------------------------

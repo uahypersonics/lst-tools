@@ -19,7 +19,6 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from lst_tools.convert import generate_lst_input_deck
 from lst_tools.data_io import read_tecplot_ascii
-from lst_tools.geometry import GeometryKind
 from lst_tools.hpc import detect, hpc_configure, script_build
 
 from lst_tools.config import write_config
@@ -115,7 +114,6 @@ class _TrackingData(NamedTuple):
 # --------------------------------------------------
 # 1d hampel filter
 # --------------------------------------------------
-
 def _hampel_1d(y: np.ndarray, win: int = 7, n_sig: float = 3.0) -> np.ndarray:
 
     """
@@ -151,9 +149,6 @@ def _hampel_1d(y: np.ndarray, win: int = 7, n_sig: float = 3.0) -> np.ndarray:
 # --------------------------------------------------
 # set to zero any contiguous run where y>thresh whose length < k
 # --------------------------------------------------
-
-
-
 def _remove_spurious_peaks(y: np.ndarray, k: int, thresh: float = 0.0) -> np.ndarray:
 
     y = np.asarray(y, float)
@@ -174,7 +169,6 @@ def _remove_spurious_peaks(y: np.ndarray, k: int, thresh: float = 0.0) -> np.nda
 # --------------------------------------------------
 # centered rolling minimum (NumPy-only)
 # --------------------------------------------------
-
 def _rolling_min(a: np.ndarray, w: int) -> np.ndarray:
 
     """Centered rolling min with edge padding; w must be odd."""
@@ -191,7 +185,6 @@ def _rolling_min(a: np.ndarray, w: int) -> np.ndarray:
 # 2) Zero short positive runs (< min_run)
 # 3) Zero points with low prominence relative to rolling min
 # --------------------------------------------------
-
 def _clean_alpi_row(
     y: np.ndarray,
     *,
@@ -223,7 +216,6 @@ def _clean_alpi_row(
 # --------------------------------------------------
 # dynamic-programming ridge tracker (pure NumPy)
 # --------------------------------------------------
-
 def _track_ridge_dp(
     alpi_2d: np.ndarray, lam: float = 0.6, max_jump: int = 3
 ) -> np.ndarray:
@@ -275,9 +267,8 @@ def _track_ridge_dp(
 
 
 # --------------------------------------------------
-# build a keep mask around a ridge path (± half_width bins)
+# build a keep mask around a ridge path (+- half_width bins)
 # --------------------------------------------------
-
 def _keep_mask_from_path(
     j_star: np.ndarray, n_freq: int, half_width: int = 3
 ) -> np.ndarray:
@@ -290,13 +281,9 @@ def _keep_mask_from_path(
     return keep
 
 
-
 # --------------------------------------------------
 # smooth a 2d contour field
 # --------------------------------------------------
-
-
-
 def smooth_contour_field(
     field_2d: np.ndarray, npasses: int = 1
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -380,42 +367,8 @@ def smooth_contour_field(
 
 
 # --------------------------------------------------
-# Phase 1: resolve and validate configuration
-# --------------------------------------------------
-
-
-def _resolve_config(cfg: Mapping[str, Any] | None) -> Any:
-    """Load config, run consistency checks, validate geometry."""
-    cfg = resolve_config(cfg)
-
-    # tracking-specific: validate geometry parameters
-    theta_deg = cfg.geometry.theta_deg
-    geometry_type = cfg.geometry.type
-
-    if theta_deg is None:
-        logger.warning("theta_deg not provided in config file")
-        if geometry_type == GeometryKind.CONE:
-            logger.error(
-                "theta_deg is required for cone geometries"
-                " => update lst configuration file and rerun tracking setup"
-            )
-            raise KeyError
-        else:
-            logger.info(
-                "theta_deg not required for geometry type %s"
-                " -> set theta_deg = 0 and continue",
-                geometry_type,
-            )
-            cfg.geometry.theta_deg = 0.0
-
-    return cfg
-
-
-# --------------------------------------------------
 # Phase 2: read all input data (parsing solution + baseflow)
 # --------------------------------------------------
-
-
 def _read_input_data(
     cfg: Any,
     fname_parsing: str | None,
@@ -495,8 +448,6 @@ def _read_input_data(
 # --------------------------------------------------
 # Phase 3: compute beta values for tracking
 # --------------------------------------------------
-
-
 def _resolve_beta_values(cfg: Any, betr_parsing: np.ndarray) -> np.ndarray:
     """Compute the set of beta values to track, filtered against available data."""
     beta_s = cfg.lst.params.beta_s
@@ -517,8 +468,6 @@ def _resolve_beta_values(cfg: Any, betr_parsing: np.ndarray) -> np.ndarray:
 # --------------------------------------------------
 # Phase 4: scaffold a case directory (files + executable)
 # --------------------------------------------------
-
-
 def _setup_case_directory(
     betr_loc: float, cfg: Any
 ) -> tuple[str, str | None]:
@@ -541,8 +490,6 @@ def _setup_case_directory(
 # --------------------------------------------------
 # Phase 5: find the initial guess for eigenvalue tracking
 # --------------------------------------------------
-
-
 def _resolve_freq_bound_start(
     f_s: float | None,
     freq_line: np.ndarray,
@@ -571,6 +518,9 @@ def _resolve_freq_bound_start(
     return idf_s
 
 
+# --------------------------------------------------
+# get the founds in frequency space for the tracking search window
+# --------------------------------------------------
 def _resolve_freq_bound_end(
     f_e: float | None,
     freq_line: np.ndarray,
@@ -601,6 +551,9 @@ def _resolve_freq_bound_end(
     return idf_e
 
 
+# --------------------------------------------------
+# find initial guess for tracking 
+# --------------------------------------------------
 def _find_initial_guess(
     data: _TrackingData,
     idx_betr: int,
@@ -735,10 +688,8 @@ def _find_initial_guess(
 
 
 # --------------------------------------------------
-# Phase 6: build tracking config, input deck, and HPC script
+# build tracking config, input deck, and HPC script
 # --------------------------------------------------
-
-
 def _build_and_write_case(
     dir_name: str,
     cfg: Any,
@@ -885,8 +836,6 @@ def _build_and_write_case(
 # --------------------------------------------------
 # main function: orchestrate the tracking setup pipeline
 # --------------------------------------------------
-
-
 def tracking_setup(
     *,
     cfg: Mapping[str, Any] | None = None,
@@ -908,9 +857,13 @@ def tracking_setup(
        write input deck and HPC script
     6. Write a launcher script to submit all jobs
     """
+
+    # info output (only printed if --verbose/-v or higher)
     logger.info("setting up tracking step ...")
 
-    cfg = _resolve_config(cfg)
+    cfg = resolve_config(cfg)
+    if cfg.geometry.theta_deg is None:
+        cfg.geometry.theta_deg = 0.0
 
     if auto_fill:
         auto_fill_tracking(cfg, force=force, cfg_path=cfg_path)

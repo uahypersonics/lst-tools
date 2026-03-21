@@ -4,6 +4,9 @@ Adding a new cluster = adding one ``_register()`` call below.
 Nothing else in the codebase needs to change.
 """
 
+# --------------------------------------------------
+# import necessary modules
+# --------------------------------------------------
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -45,18 +48,19 @@ class ClusterProfile:
 
 
 # --------------------------------------------------
-# registry
+# cluster profile registry
+# maps the raw hostname (or login alias) to a ClusterProfile
 # --------------------------------------------------
 _PROFILES: dict[str, ClusterProfile] = {}
 
-
+# helper to register a profile under its name and login aliases
 def _register(p: ClusterProfile) -> None:
     """Register *p* under its ``name`` and every ``login_alias``."""
     _PROFILES[p.name] = p
     for alias in p.login_aliases:
         _PROFILES[alias] = p
 
-
+# helper to look up a profile by hostname
 def lookup(hostname: str) -> ClusterProfile | None:
     """Return the profile for *hostname*, or ``None`` for unknown clusters."""
     return _PROFILES.get(hostname)
@@ -65,6 +69,8 @@ def lookup(hostname: str) -> ClusterProfile | None:
 # --------------------------------------------------
 # known clusters
 # --------------------------------------------------
+
+# puma
 _register(
     ClusterProfile(
         name="puma",
@@ -83,6 +89,7 @@ _register(
     )
 )
 
+# carpenter
 _register(
     ClusterProfile(
         name="carpenter",
@@ -97,6 +104,7 @@ _register(
     )
 )
 
+# nautilus
 _register(
     ClusterProfile(
         name="nautilus",

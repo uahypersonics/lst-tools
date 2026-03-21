@@ -198,9 +198,11 @@ def _detect_resources(
 def detect() -> DetectedEnv:
     """Probe the runtime environment (cached for the process lifetime)."""
     hostname = _detect_hostname()
+
+    # get cluster profile (if registered)
     profile = lookup(hostname)
 
-    # resolve hostname to canonical cluster name when a profile matches
+    # resolve hostname to known cluster name when a profile matches
     if profile is not None:
         hostname = profile.name
 
@@ -211,6 +213,7 @@ def detect() -> DetectedEnv:
     cpus, hist = _detect_cpus(scheduler, profile)
     resources = _detect_resources(profile)
 
+    # save the detected environment in a frozen dataclass
     env = DetectedEnv(
         hostname=hostname,
         scheduler=scheduler,
@@ -221,6 +224,7 @@ def detect() -> DetectedEnv:
         profile=profile,
     )
 
+    # log the detected environment for debugging purposes
     logger.info("host name: %s", env.hostname)
     logger.info("scheduler type: %s", env.scheduler)
     logger.info("number of cpus per node: %s", env.cpus_per_node)
