@@ -4,6 +4,9 @@ Reads the configuration, splits the domain into per-station
 subdirectories, generates input decks, and writes HPC job scripts.
 """
 
+# --------------------------------------------------
+# import necessary modules
+# --------------------------------------------------
 from __future__ import annotations
 
 import copy
@@ -23,6 +26,9 @@ from ._common import (
     write_launcher_script,
 )
 
+# --------------------------------------------------
+# set up logger
+# --------------------------------------------------
 logger = logging.getLogger(__name__)
 
 
