@@ -159,10 +159,11 @@ def _opt_int(v: Any) -> int | None:
 
 
 def _opt_str(v: Any) -> str | None:
-    """Convert *v* to str, or return ``None`` if missing."""
+    """Convert *v* to str, or return ``None`` if missing or empty."""
     if v is None:
         return None
-    return str(v)
+    s = str(v).strip()
+    return s if s else None
 
 
 def _coerce_bool(v: Any) -> bool:
