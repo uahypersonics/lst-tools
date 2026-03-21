@@ -19,6 +19,7 @@ from typing import Annotated
 import typer
 
 from .cmd_hpc import cmd_hpc
+from .cmd_info import cmd_info
 from .cmd_init import cmd_init
 from .cmd_lastrac import cmd_lastrac
 from .cmd_parsing import cmd_parsing
@@ -143,6 +144,7 @@ def _main(
 # --------------------------------------------------
 cli.command(name="init")(cmd_init)
 cli.add_typer(setup_app, name="setup")
+cli.command(name="info")(cmd_info)
 cli.command(name="lastrac")(cmd_lastrac)
 cli.add_typer(process_app, name="process")
 cli.command(name="hpc")(cmd_hpc)
