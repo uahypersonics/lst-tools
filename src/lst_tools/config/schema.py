@@ -503,6 +503,33 @@ class HpcConfig(_ConfigBase):
 
 
 # --------------------------------------------------
+# Processing dataclass
+# --------------------------------------------------
+@dataclasses.dataclass(eq=False)
+# inherit from _ConfigBase to get .to_dict(), .to_toml_dict(), and custom __eq__
+class Processing(_ConfigBase):
+    """Post-processing settings for tracking results."""
+    interpolate: bool = False
+    gate_tol: float = 0.10
+    min_valid: int = 40
+    peak_order: int = 1
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Processing:
+        """Build a ``Processing`` from a plain dict."""
+        _interp = d.get("interpolate")
+        _gate = d.get("gate_tol")
+        _minv = d.get("min_valid")
+        _peak = d.get("peak_order")
+        return cls(
+            interpolate=_coerce_bool(_interp) if _interp is not None else False,
+            gate_tol=float(_gate) if _gate is not None else 0.10,
+            min_valid=int(_minv) if _minv is not None else 40,
+            peak_order=int(_peak) if _peak is not None else 1,
+        )
+
+
+# --------------------------------------------------
 # Assembled Config (includes all sections)
 # --------------------------------------------------
 @dataclasses.dataclass(eq=False)
@@ -533,6 +560,7 @@ class Config(_ConfigBase):
     meanflow_conversion: MeanflowConversion = dataclasses.field(default_factory=MeanflowConversion)
     lst: LstConfig = dataclasses.field(default_factory=LstConfig)
     hpc: HpcConfig = dataclasses.field(default_factory=HpcConfig)
+    processing: Processing = dataclasses.field(default_factory=Processing)
 
     # validation method to check value constraints and raise ValueError if any violations are found
     def validate(self) -> Config:
@@ -606,6 +634,7 @@ class Config(_ConfigBase):
             ),
             lst=LstConfig.from_dict(d.get("lst", {})),
             hpc=HpcConfig.from_dict(d.get("hpc", {})),
+            processing=Processing.from_dict(d.get("processing", {})),
         )
         return cfg.validate()
 

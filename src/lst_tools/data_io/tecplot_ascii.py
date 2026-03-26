@@ -1,9 +1,8 @@
 """Tecplot ASCII file reader and writer."""
 
 # --------------------------------------------------
-# import necessary libraries
+# import necessary modules
 # --------------------------------------------------
-
 from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
@@ -12,14 +11,14 @@ import numpy as np
 from pathlib import Path
 from pprint import pformat
 
+# --------------------------------------------------
+# set up logger
+# --------------------------------------------------
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------
 # data class for tecplot zone information
 # --------------------------------------------------
-
-
-
 @dataclass
 class TecplotZone:
     """Metadata for a single Tecplot zone (dimensions, packing, etc.)."""
@@ -36,9 +35,6 @@ class TecplotZone:
 # --------------------------------------------------
 # data class for tecplot data
 # --------------------------------------------------
-
-
-
 @dataclass
 class TecplotData:
     """Parsed Tecplot ASCII dataset (header + zone + data array)."""
@@ -713,9 +709,6 @@ def read_tecplot_ascii(path: str | Path) -> TecplotData:
 # --------------------------------------------------
 # write Tecplot ASCII structured-zone file
 # --------------------------------------------------
-
-
-
 def write_tecplot_ascii(
     path: str | Path,
     variables: dict[str, np.ndarray],
@@ -780,8 +773,18 @@ def write_tecplot_ascii(
                 for i in range(ni):
                     vals = " ".join(f"{a[j, i]:{fmt}}" for a in arrays)
                     f.write(vals + "\n")
+
+        elif arrays[0].ndim == 3:
+            nk, nj, ni = shape
+            f.write(f'ZONE T="{zone}", I={ni}, J={nj}, K={nk}\n')
+            for k in range(nk):
+                for j in range(nj):
+                    for i in range(ni):
+                        vals = " ".join(f"{a[k, j, i]:{fmt}}" for a in arrays)
+                        f.write(vals + "\n")
+
         else:
-            raise ValueError(f"expected 1-D or 2-D arrays, got ndim={arrays[0].ndim}")
+            raise ValueError(f"expected 1-D, 2-D, or 3-D arrays, got ndim={arrays[0].ndim}")
 
     logger.debug("wrote tecplot file: %s", path)
     return path

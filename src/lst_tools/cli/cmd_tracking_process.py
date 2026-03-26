@@ -42,9 +42,9 @@ def cmd_tracking_process(
         typer.Option("--volume", help="Run only 3-D volume assembly."),
     ] = False,
     interpolate: Annotated[
-        bool,
-        typer.Option("--interpolate", help="Use parabolic interpolation for sub-grid peak refinement."),
-    ] = False,
+        Optional[bool],
+        typer.Option("--interpolate/--no-interpolate", help="Use parabolic interpolation for sub-grid peak refinement."),
+    ] = None,
 ) -> None:
     """Post-process LST tracking calculation results."""
 

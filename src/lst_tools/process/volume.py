@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 from scipy.interpolate import interp1d
 
-from lst_tools.data_io import read_tecplot_ascii
+from lst_tools.data_io import read_tecplot_ascii, write_tecplot_ascii
 
 # --------------------------------------------------
 # set up logger
@@ -251,7 +251,20 @@ def assemble_volume(
     # --------------------------------------------------
     output_path = parent_dir / output_fname
 
-    _write_tecplot_3d(output_path, vol, variables, nx, nf, n_kc)
+    # build variable dict for the shared writer
+    # vol is (nx, nf, n_kc, nvars) — transpose to (n_kc, nf, nx) per variable
+    # so that I=nx, J=nf, K=n_kc in the Tecplot file
+    var_dict = {
+        name: np.transpose(vol[:, :, :, col], (2, 1, 0))
+        for col, name in enumerate(variables)
+    }
+
+    write_tecplot_ascii(
+        output_path,
+        var_dict,
+        title="lst_vol",
+        zone="lst_vol",
+    )
 
     logger.info("wrote volume: %s (I=%d, J=%d, K=%d)", output_path, nx, nf, n_kc)
 
@@ -294,41 +307,3 @@ def _parse_kc_value(dirname: str) -> float:
     # strip 'kc_' prefix, replace 'pt' with '.', convert to float
     num_str = dirname[3:].replace("pt", ".")
     return float(num_str)
-
-
-def _write_tecplot_3d(
-    path: Path,
-    vol: np.ndarray,
-    variables: list[str],
-    ni: int,
-    nj: int,
-    nk: int,
-    title: str = "lst_vol",
-    zone: str = "lst_vol",
-    fmt: str = ".10e",
-) -> None:
-    """Write a 3-D Tecplot ASCII file in point (block) format.
-
-    Args:
-        path: output file path.
-        vol: array of shape (ni, nj, nk, nvars).
-        variables: list of variable names.
-        ni, nj, nk: zone dimensions.
-        title: Tecplot title string.
-        zone: Tecplot zone name.
-        fmt: float format specifier.
-    """
-    with open(path, "w") as fh:
-
-        # header
-        var_str = ", ".join(f'"{v}"' for v in variables)
-        fh.write(f'TITLE = "{title}"\n')
-        fh.write(f"VARIABLES = {var_str}\n")
-        fh.write(f'ZONE T = "{zone}", I = {ni}, J = {nj}, K = {nk}\n')
-
-        # data — Tecplot POINT format: i varies fastest
-        for k in range(nk):
-            for j in range(nj):
-                for i in range(ni):
-                    vals = " ".join(f"{vol[i, j, k, v]:{fmt}}" for v in range(len(variables)))
-                    fh.write(vals + "\n")

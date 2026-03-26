@@ -15,10 +15,10 @@ can be used as "only" selectors (e.g. ``do_maxima=True, do_volume=False``).
 from __future__ import annotations
 import logging
 from pathlib import Path
-from typing import Any, Mapping
 
 import typer
 
+from lst_tools.config import Config
 from .maxima import extract_maxima
 from .volume import assemble_volume
 
@@ -34,20 +34,22 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------
 def tracking_process(
     *,
-    cfg: Mapping[str, Any] | None = None,
+    cfg: Config | None = None,
     do_maxima: bool = True,
     do_volume: bool = True,
     work_dir: Path | None = None,
     kc_dirs: list[Path] | None = None,
-    interpolate: bool = False,
+    interpolate: bool | None = None,
 ) -> Path:
     """
     Process LST tracking calculation results.
 
     Parameters
     ----------
-    cfg : Optional[Mapping[str, Any]]
-        Configuration dictionary (currently unused, reserved for future).
+    cfg : Optional[Config]
+        Configuration object. Processing defaults come from
+        ``cfg.processing`` (gate_tol, min_valid, peak_order,
+        interpolate).  CLI flags override config values.
     do_maxima : bool
         If True, run ridge-line maxima extraction for every kc_* case.
     do_volume : bool
@@ -58,6 +60,9 @@ def tracking_process(
     kc_dirs : Optional[list[Path]]
         Specific kc_* directories to process. If None, discovers all
         kc_* directories in work_dir.
+    interpolate : Optional[bool]
+        Use parabolic interpolation for peak refinement.
+        If None, falls back to ``cfg.processing.interpolate``.
 
     Returns
     -------
@@ -70,6 +75,18 @@ def tracking_process(
     # --------------------------------------------------
     if work_dir is None:
         work_dir = Path.cwd()
+
+    # --------------------------------------------------
+    # resolve processing settings from config + CLI overrides
+    # --------------------------------------------------
+    proc = cfg.processing if cfg is not None else None
+
+    # CLI flag (if explicitly set) overrides config value
+    use_interpolate = interpolate if interpolate is not None else (
+        proc.interpolate if proc is not None else False
+    )
+    gate_tol = proc.gate_tol if proc is not None else 0.10
+    min_valid = proc.min_valid if proc is not None else 40
 
     logger.info("processing tracking results in %s", work_dir)
 
@@ -100,7 +117,12 @@ def tracking_process(
 
         for kc_dir in kc_dirs:
             typer.echo(f"  extracting maxima: {kc_dir.name}")
-            written = extract_maxima(kc_dir, interpolate=interpolate)
+            written = extract_maxima(
+                kc_dir,
+                interpolate=use_interpolate,
+                gate_tol=gate_tol,
+                min_valid=min_valid,
+            )
             total_files += len(written)
 
         typer.echo(f"maxima extraction complete: {total_files} file(s) written")
