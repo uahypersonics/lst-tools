@@ -223,5 +223,6 @@ src/lst_tools/_version.py
 sandbox/
 run.*
 debug/
+legacy/
 
 *DS_Store*

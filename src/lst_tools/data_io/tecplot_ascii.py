@@ -416,9 +416,6 @@ def _parse_zone_header(lines: list[str], idx_start: int) -> tuple[TecplotZone, i
 # --------------------------------------------------
 # helper function to read plain ASCII files (no Tecplot headers)
 # --------------------------------------------------
-
-
-
 def _read_plain_ascii(
     lines: list[str], path: str | Path
 ) -> TecplotData:
@@ -647,7 +644,7 @@ def read_tecplot_ascii(path: str | Path) -> TecplotData:
     # handle scientific notation, signs, etc.
     numeric_tokens: list[float] = []
     
-    # loop over lines starting at idx_data_start until the end of the file
+    # loop over lines starting at idx_data_start until we have enough tokens
     for L in lines[idx_data_start:]:
         
         # strip leading/trailing whitespace from current line
@@ -656,6 +653,11 @@ def read_tecplot_ascii(path: str | Path) -> TecplotData:
         # skip empty lines
         if not L:
             continue
+
+        # stop if we hit a new zone header or other non-data keyword
+        L_upper = L.upper()
+        if L_upper.startswith("ZONE") or L_upper.startswith("TITLE") or L_upper.startswith("VARIABLES"):
+            break
         
         # split by whitespace or commas (both are common delimiters in tecplot ascii files)
         parts = re.split(r"[,\s]+", L.strip())
@@ -664,12 +666,18 @@ def read_tecplot_ascii(path: str | Path) -> TecplotData:
         for part in parts:
             try:
                 numeric_tokens.append(float(part))
-            except ValueError as e:
-                raise ValueError(
-                    f"Non-numeric token '{part}' encountered in data section; "
-                    "Tecplot ASCII is expected to be whitespace-separated numeric values. "
-                    "please re-export or clean the file."
-                ) from e
+            except ValueError:
+                # handle Fortran-style floats with missing 'E'
+                # e.g. '0.901560349186166-100' -> '0.901560349186166E-100'
+                fixed = re.sub(r"(\d)([+-])(\d)", r"\1E\2\3", part, count=1)
+                try:
+                    numeric_tokens.append(float(fixed))
+                except ValueError as e:
+                    raise ValueError(
+                        f"Non-numeric token '{part}' encountered in data section; "
+                        "Tecplot ASCII is expected to be whitespace-separated numeric values. "
+                        "please re-export or clean the file."
+                    ) from e
 
     expected = npts * nvars
     
