@@ -134,42 +134,37 @@ def cmd_clean_parsing(
 # --------------------------------------------------
 def cmd_clean_tracking(
     directory: Annotated[
-        Path,
-        typer.Option("--dir", "-d", help="Directory to clean (default: current directory)."),
-    ] = Path("."),
+        list[Path],
+        typer.Option("--dir", "-d", help="Case directory to clean (e.g. kc_0000pt00). Repeat for multiple. If omitted, cleans all kc_* directories."),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", "-f", help="Skip confirmation prompt."),
     ] = False,
 ) -> None:
-    """Remove solver artifacts from ``kc_*/`` directories.
+    """Remove solver artifacts from tracking case directories.
 
     Removes LST solver output files (BaseflowTecFormat.dat, fort.*,
-    Frequency*, etc.) from every ``kc_*/`` case directory, plus the
-    ``run_jobs.sh`` launcher and ``debug/`` directory.
+    Frequency*, etc.) from ``kc_*/`` case directories.
+
+    By default cleans all ``kc_*/`` directories in the current directory.
+    Use ``--dir`` to target specific directories instead.
     """
 
-    # convert to absolute path for consistency and globbing
-    directory = directory.resolve()
-
-    # collect all tracking directories 
-    dir_list_tmp = directory.glob("kc_*")
-
-    dir_list = []
-
-    # check that dir list only contains directories (not files); if any files match, raise an error
-    for d in dir_list_tmp:
-        if d.is_dir():
-            dir_list.append(d)
-
-    # initialize list of targets to remove 
-    targets: list[Path] = []
+    # build the list of directories to clean
+    if directory:
+        # user specified explicit directories
+        dir_list = [d.resolve() for d in directory if d.resolve().is_dir()]
+    else:
+        # default: all kc_* directories in the current directory
+        cwd = Path(".").resolve()
+        dir_list = sorted(d for d in cwd.glob("kc_*") if d.is_dir())
 
     # collect solver artifacts from each tracking directory
+    targets: list[Path] = []
     for d in dir_list:
         targets.extend(_collect_targets(d, _SOLVER_ARTIFACTS))
 
-    # remove targets from tracking directories
     _confirm_and_remove(targets, force)
 
 
