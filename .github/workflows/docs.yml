@@ -4,6 +4,7 @@ name: Documentation
 on:
   push:
     branches: [main]
+    tags: [v*]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -28,13 +29,30 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install PDF system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2 \
+            libpango-1.0-0 \
+            libpangocairo-1.0-0 \
+            libgdk-pixbuf-2.0-0 \
+            libffi-dev \
+            shared-mime-info
+
       - name: Install dependencies
         run: |
-          pip install mkdocs-material mkdocs-bibtex
-          pip install -e .
+          pip install -e .[docs]
 
       - name: Build documentation
-        run: mkdocs build --strict
+        run: mkdocs build --strict -f mkdocs-pdf.yml
+
+      - name: Create versioned PDF filename on release tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cp \
+            site/pdf/lst-tools-documentation.pdf \
+            "site/pdf/lst-tools-${GITHUB_REF_NAME}.pdf"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -42,7 +60,7 @@ jobs:
           path: site
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     environment:

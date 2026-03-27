@@ -11,6 +11,18 @@
 
 ## Quick Start
 
+[Download PDF Documentation](https://uahypersonics.github.io/lst-tools/pdf/lst-tools-documentation.pdf){ .md-button .md-button--primary }
+
+## PDF Downloads
+
+- Latest PDF (stable URL):
+	https://uahypersonics.github.io/lst-tools/pdf/lst-tools-documentation.pdf
+- Versioned PDF (tag builds):
+	https://uahypersonics.github.io/lst-tools/pdf/lst-tools-vX.Y.Z.pdf
+
+For example, tag `v0.1.3` publishes:
+`https://uahypersonics.github.io/lst-tools/pdf/lst-tools-v0.1.3.pdf`
+
 Install the package (see [Installation](installation.md) for detailed instructions):
 
 ```bash
