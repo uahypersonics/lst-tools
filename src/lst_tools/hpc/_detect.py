@@ -4,6 +4,9 @@
 the lifetime of the process.  All subprocess calls live here.
 """
 
+# --------------------------------------------------
+# import necessary modules
+# --------------------------------------------------
 from __future__ import annotations
 
 import functools
@@ -27,12 +30,15 @@ from ._parsers import (
 )
 from ._profiles import ClusterProfile, Scheduler, lookup
 
+# --------------------------------------------------
+# set up logger
+# --------------------------------------------------
 logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------
+# --------------------------------------------------
 # frozen result of environment probing
-# ------------------------------------------------------------------
+# --------------------------------------------------
 @dataclass(frozen=True)
 class DetectedEnv:
     """Immutable snapshot of everything the machine told us."""
@@ -46,9 +52,9 @@ class DetectedEnv:
     profile: ClusterProfile | None
 
 
-# ------------------------------------------------------------------
-# individual probes (private)
-# ------------------------------------------------------------------
+# --------------------------------------------------
+# internal function to detect hostname
+# --------------------------------------------------
 def _detect_hostname() -> str:
     raw = os.getenv("HOSTNAME") or socket.gethostname()
     name = raw.split(".")[0]
@@ -56,6 +62,9 @@ def _detect_hostname() -> str:
     return name
 
 
+# --------------------------------------------------
+# internal function to detect scheduler type
+# --------------------------------------------------
 def _detect_scheduler() -> Scheduler:
     if os.getenv("SLURM_JOB_ID") or shutil.which("squeue") or shutil.which("sbatch"):
         return Scheduler.SLURM
@@ -69,6 +78,9 @@ def _detect_scheduler() -> Scheduler:
     return Scheduler.UNKNOWN
 
 
+# --------------------------------------------------
+# internal function to detect preferred launcher
+# --------------------------------------------------
 def _detect_launcher() -> str | None:
     for name in ("mpirun", "mpiexec", "aprun", "srun"):
         p = shutil.which(name)
@@ -77,6 +89,9 @@ def _detect_launcher() -> str | None:
     return None
 
 
+# --------------------------------------------------
+# internal functions to detect CPUs per node for slurm
+# --------------------------------------------------
 def _detect_cpus_slurm() -> tuple[int | None, dict[int, int]]:
     env = os.environ
 
@@ -113,6 +128,9 @@ def _detect_cpus_slurm() -> tuple[int | None, dict[int, int]]:
     return None, {}
 
 
+# --------------------------------------------------
+# internal function to detect CPUs per node for PBS
+# --------------------------------------------------
 def _detect_cpus_pbs() -> tuple[int | None, dict[int, int]]:
     nodefile = os.environ.get("PBS_NODEFILE")
     if nodefile and os.path.exists(nodefile):
@@ -144,6 +162,9 @@ def _detect_cpus_pbs() -> tuple[int | None, dict[int, int]]:
     return None, {}
 
 
+# --------------------------------------------------
+# internal function to detect CPUs per node based on scheduler and profile
+# --------------------------------------------------
 def _detect_cpus(
     scheduler: Scheduler, profile: ClusterProfile | None
 ) -> tuple[int | None, dict[int, int]]:
@@ -165,6 +186,9 @@ def _detect_cpus(
     return None, {}
 
 
+# --------------------------------------------------
+# internal function to detect HPC resources (allocations)
+# --------------------------------------------------
 def _detect_resources(
     profile: ClusterProfile | None,
 ) -> list[dict[str, object]]:
@@ -191,9 +215,9 @@ def _detect_resources(
         return []
 
 
-# ------------------------------------------------------------------
+# --------------------------------------------------
 # public entry point (cached)
-# ------------------------------------------------------------------
+# --------------------------------------------------
 @functools.cache
 def detect() -> DetectedEnv:
     """Probe the runtime environment (cached for the process lifetime)."""

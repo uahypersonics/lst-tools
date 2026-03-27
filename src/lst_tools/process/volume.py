@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 from scipy.interpolate import interp1d
+import typer
 
 from lst_tools.data_io import read_tecplot_ascii, write_tecplot_ascii
 
@@ -84,6 +85,9 @@ def assemble_volume(
     slices: list[_SliceData] = []
 
     for kc_dir in kc_dirs:
+
+        # output for user to track progress
+        typer.echo(f"- {kc_dir.name}")
 
         sol_path = kc_dir / solution_fname
 

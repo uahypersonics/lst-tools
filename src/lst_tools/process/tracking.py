@@ -116,7 +116,7 @@ def tracking_process(
         total_files = 0
 
         for kc_dir in kc_dirs:
-            typer.echo(f"  extracting maxima: {kc_dir.name}")
+            typer.echo(f"- {kc_dir.name}")
             written = extract_maxima(
                 kc_dir,
                 interpolate=use_interpolate,
