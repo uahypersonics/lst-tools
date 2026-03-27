@@ -45,7 +45,13 @@ jobs:
           pip install -e .[docs]
 
       - name: Build documentation
-        run: mkdocs build --strict -f mkdocs-pdf.yml
+        run: |
+          # keep strict validation for normal site content and links
+          mkdocs build --strict
+
+          # build PDF overlay separately; mkdocs-with-pdf escalates warnings
+          # to hard failures when strict mode is enabled
+          mkdocs build -f mkdocs-pdf.yml
 
       - name: Create versioned PDF filename on release tags
         if: startsWith(github.ref, 'refs/tags/v')
