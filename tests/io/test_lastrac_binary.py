@@ -5,7 +5,6 @@ and verify every field survives the trip.
 """
 
 import numpy as np
-import pytest
 
 from lst_tools.data_io import LastracWriter, LastracReader
 

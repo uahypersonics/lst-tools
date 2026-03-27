@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from lst_tools.setup.tracking import (
     _hampel_1d,

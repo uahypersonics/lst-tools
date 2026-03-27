@@ -5,7 +5,6 @@ rather than mocking the I/O layer.
 """
 
 import numpy as np
-import pytest
 
 from lst_tools.data_io import LastracWriter
 from lst_tools.setup._common import read_baseflow_stations, read_baseflow_profiles

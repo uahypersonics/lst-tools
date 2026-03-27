@@ -2,8 +2,6 @@
 
 import stat
 
-import numpy as np
-import pytest
 
 from lst_tools.setup._common import scaffold_case_dir, write_launcher_script
 
