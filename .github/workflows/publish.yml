@@ -76,7 +76,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Build citation note
+        run: |
+          cat > release-notes-extra.md << 'EOF'
+          ## Citation
+
+          If this release is used in academic or government/industry technical work, please cite this software using `CITATION.cff` in the repository.
+
+          Once Zenodo archiving is enabled for this repository, cite the Zenodo DOI for the exact release as well.
+          EOF
       - name: Create GitHub Release
-        run: gh release create "${{ github.ref_name }}" --generate-notes
+        run: gh release create "${{ github.ref_name }}" --generate-notes --notes-file release-notes-extra.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

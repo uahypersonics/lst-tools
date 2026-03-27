@@ -1,0 +1,21 @@
+{
+  "title": "lst-tools",
+  "description": "Python toolkit with pre- and postprocessing utilities for linear stability theory (LST) workflows.",
+  "upload_type": "software",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "linear stability theory",
+    "boundary layer",
+    "hypersonics",
+    "transition",
+    "CFD"
+  ],
+  "creators": [
+    {
+      "name": "Hader, Christoph",
+      "affiliation": "University of Arizona",
+      "orcid": "0000-0002-0956-000X"
+    }
+  ],
+  "access_right": "open"
+}
