@@ -7,6 +7,7 @@
 - **CLI**: Streamlined workflow from the terminal
 - **API**: Python interface for scripting and automation
 - **HPC**: Job script generation for cluster environments
+- **Post-processing**: Ridge-line maxima extraction and 3-D tracking volume assembly
 
 ## Quick Start
 
@@ -29,8 +30,15 @@ lst-tools setup parsing --auto-fill
 # set up and run tracking
 lst-tools setup tracking --auto-fill
 
-# post-process results
-lst-tools process tracking
+# post-process tracking results (maxima + volume)
+lst-tools process tracking --interpolate
+
+# optional: set up and process spectra
+lst-tools setup spectra
+lst-tools process spectra
+
+# optional: clean generated artifacts
+lst-tools clean tracking --force
 ```
 
 `lst-tools` can also be used as a Python library. See the [API Reference](api/index.md) for details.

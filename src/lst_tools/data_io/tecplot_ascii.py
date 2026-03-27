@@ -10,6 +10,7 @@ import re
 import numpy as np
 from pathlib import Path
 from pprint import pformat
+from typing import Callable
 
 # --------------------------------------------------
 # set up logger
@@ -716,6 +717,7 @@ def write_tecplot_ascii(
     title: str = "debug",
     zone: str = "zone",
     fmt: str = ".10e",
+    progress_callback: Callable[[int], None] | None = None,
 ) -> Path:
     """Write a single-zone Tecplot ASCII file.
 
@@ -733,6 +735,9 @@ def write_tecplot_ascii(
         Tecplot ZONE T string.
     fmt : str, optional
         Format spec applied to every value (default ``".10e"``).
+    progress_callback : callable, optional
+        Callback invoked as ``progress_callback(n)`` with the number of
+        points written in each chunk.
 
     Returns
     -------
@@ -754,6 +759,7 @@ def write_tecplot_ascii(
 
     # build header
     var_line = " ".join(f'"{n}"' for n in names)
+    value_fmt = "{:" + fmt + "}"
 
     with open(path, "w") as f:
         f.write(f'TITLE = "{title}"\n')
@@ -762,26 +768,44 @@ def write_tecplot_ascii(
         if arrays[0].ndim == 1:
             ni = shape[0]
             f.write(f'ZONE T="{zone}", I={ni}\n')
-            for i in range(ni):
-                vals = " ".join(f"{a[i]:{fmt}}" for a in arrays)
-                f.write(vals + "\n")
+            # build once and flush once to reduce write syscall overhead
+            lines = [
+                " ".join(value_fmt.format(a[i]) for a in arrays)
+                for i in range(ni)
+            ]
+            f.write("\n".join(lines))
+            f.write("\n")
+            if progress_callback is not None:
+                progress_callback(ni)
 
         elif arrays[0].ndim == 2:
             nj, ni = shape
             f.write(f'ZONE T="{zone}", I={ni}, J={nj}\n')
             for j in range(nj):
-                for i in range(ni):
-                    vals = " ".join(f"{a[j, i]:{fmt}}" for a in arrays)
-                    f.write(vals + "\n")
+                # write one full row chunk at a time
+                lines = [
+                    " ".join(value_fmt.format(a[j, i]) for a in arrays)
+                    for i in range(ni)
+                ]
+                f.write("\n".join(lines))
+                f.write("\n")
+                if progress_callback is not None:
+                    progress_callback(ni)
 
         elif arrays[0].ndim == 3:
             nk, nj, ni = shape
             f.write(f'ZONE T="{zone}", I={ni}, J={nj}, K={nk}\n')
             for k in range(nk):
                 for j in range(nj):
-                    for i in range(ni):
-                        vals = " ".join(f"{a[k, j, i]:{fmt}}" for a in arrays)
-                        f.write(vals + "\n")
+                    # write one I-line chunk at a time for better throughput
+                    lines = [
+                        " ".join(value_fmt.format(a[k, j, i]) for a in arrays)
+                        for i in range(ni)
+                    ]
+                    f.write("\n".join(lines))
+                    f.write("\n")
+                    if progress_callback is not None:
+                        progress_callback(ni)
 
         else:
             raise ValueError(f"expected 1-D, 2-D, or 3-D arrays, got ndim={arrays[0].ndim}")

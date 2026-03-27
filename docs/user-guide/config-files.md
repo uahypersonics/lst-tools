@@ -10,10 +10,10 @@ Generate a default configuration:
 lst-tools init
 ```
 
-Or interactively:
+Geometry presets are available:
 
 ```bash
-lst-tools init -i
+lst-tools init --geometry cone
 ```
 
 ## Configuration Sections
@@ -23,7 +23,6 @@ lst-tools init -i
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `input_file` | `str` | `"base_flow.hdf5"` | Path to the HDF5 base flow file |
-| `debug` | `bool` | `false` | Enable debug output |
 | `lst_exe` | `str` | `"lst.x"` | Path to the LST solver executable |
 
 ### `[flow_conditions]`
@@ -75,10 +74,21 @@ LST solver settings:
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `type` | `str` | — | Solver type |
+| `type` | `int` | `1` | Solver type |
 | `is_simplified` | `bool` | `false` | Use simplified equations |
+| `alpha_i_threshold` | `float` | `-100.0` | Threshold used in alpha_i filtering |
+| `generalized` | `int` | `0` | Generalized eigenproblem switch |
 | `spatial_temporal` | `int` | `1` | Spatial (1) or temporal (0) analysis |
 | `energy_formulation` | `int` | `1` | Energy equation formulation |
+
+### `[lst.options]`
+
+Additional solver options:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `geometry_switch` | `int` | — | Geometry mode switch |
+| `longitudinal_curvature` | `int` | `0` | Enable longitudinal curvature terms |
 
 ### `[lst.params]`
 
@@ -87,13 +97,22 @@ LST calculation parameters:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `ny` | `int` | `150` | Number of wall-normal grid points |
+| `yl_in` | `float` | `0.0` | Initial wall-normal location |
 | `tol_lst` | `float` | `1e-5` | Convergence tolerance |
 | `max_iter` | `int` | `15` | Maximum iterations |
 | `x_s` | `float` | — | Start streamwise location |
 | `x_e` | `float` | — | End streamwise location |
+| `i_step` | `int` | — | Streamwise index stride |
+| `tracking_dir` | `int` | `1` | Tracking direction flag |
 | `f_min` | `float` | — | Minimum frequency [Hz] |
 | `f_max` | `float` | — | Maximum frequency [Hz] |
 | `d_f` | `float` | — | Frequency step [Hz] |
+| `f_init` | `float` | `0.0` | Tracking initialization frequency [Hz] |
+| `beta_s` | `float` | — | Start spanwise wavenumber |
+| `beta_e` | `float` | — | End spanwise wavenumber |
+| `d_beta` | `float` | — | Spanwise wavenumber step |
+| `beta_init` | `float` | `0.0` | Tracking initialization spanwise wavenumber |
+| `alpha_0` | `complex` | `(0, 0)` | Initial complex alpha guess |
 
 ### `[lst.io]`
 
@@ -114,19 +133,30 @@ HPC job settings:
 | `nodes` | `int` | — | Number of nodes |
 | `time` | `str` | — | Wall time |
 | `partition` | `str` | — | Partition/queue name |
+| `extra_env` | `table` | — | Extra environment variables injected into run scripts |
+
+### `[processing]`
+
+Tracking post-processing controls:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `interpolate` | `bool` | `false` | Enable parabolic peak interpolation |
+| `gate_tol` | `float` | `0.10` | Ridge-tracking gating tolerance |
+| `min_valid` | `int` | `40` | Minimum valid points for ridge acceptance |
+| `peak_order` | `int` | `1` | Local peak search order |
 
 ## Programmatic Access
 
 ```python
-from lst_tools import read_config, validate_config, write_config
+from lst_tools.config import read_config, write_config
 
-# read
+# read as typed dataclass
 config = read_config("lst.cfg")
 
-# validate
-validate_config(config)
+# modify values
+config.lst.params.ny = 200
 
-# modify and write back
-config["lst"]["params"]["ny"] = 200
-write_config(config, "lst_modified.cfg")
+# write to TOML
+write_config("lst_modified.cfg", overwrite=True, cfg_data=config.to_dict())
 ```

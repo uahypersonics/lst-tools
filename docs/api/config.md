@@ -12,7 +12,7 @@ from lst_tools import read_config
 config = read_config("lst.cfg")
 ```
 
-Read a TOML configuration file and return a dictionary.
+Read a TOML configuration file and return a typed `Config` dataclass.
 
 ::: lst_tools.config.read_config
 
@@ -21,31 +21,31 @@ Read a TOML configuration file and return a dictionary.
 ```python
 from lst_tools import write_config
 
-write_config(config, "lst.cfg")
+write_config("lst.cfg", overwrite=True, cfg_data=config.to_dict())
 ```
 
-Write a configuration dictionary to a TOML file.
+Write configuration data to a TOML file.
 
 ::: lst_tools.config.write_config
 
-### `validate_config`
+### `Config`
 
 ```python
-from lst_tools import validate_config
+from lst_tools.config import Config
 
-validate_config(config)
+cfg = Config.from_toml("lst.cfg")
 ```
 
-Validate a configuration dictionary against the expected schema.
+Typed configuration schema and validation.
 
-::: lst_tools.config.validate_config
+::: lst_tools.config.Config
 
 ### `find_config`
 
 ```python
 from lst_tools import find_config
 
-path = find_config()
+path = find_config(".")
 ```
 
 Search for a configuration file in the current directory and parent directories.

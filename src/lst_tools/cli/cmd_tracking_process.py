@@ -45,6 +45,10 @@ def cmd_tracking_process(
         Optional[bool],
         typer.Option("--interpolate/--no-interpolate", help="Use parabolic interpolation for sub-grid peak refinement."),
     ] = None,
+    plain_output: Annotated[
+        bool,
+        typer.Option("--plain-output", help="Use plain text progress output instead of rich progress bars."),
+    ] = False,
 ) -> None:
     """Post-process LST tracking calculation results."""
 
@@ -70,6 +74,7 @@ def cmd_tracking_process(
             do_volume=do_volume,
             kc_dirs=dir,
             interpolate=interpolate,
+            plain_output=plain_output,
         )
         typer.echo("tracking post-processing complete")
     except Exception as e:

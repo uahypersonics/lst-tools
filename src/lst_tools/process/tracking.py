@@ -19,6 +19,8 @@ from pathlib import Path
 import typer
 
 from lst_tools.config import Config
+from lst_tools.utils.progress import progress
+from ._discover import discover_pattern_dirs
 from .maxima import extract_maxima
 from .volume import assemble_volume
 
@@ -40,6 +42,7 @@ def tracking_process(
     work_dir: Path | None = None,
     kc_dirs: list[Path] | None = None,
     interpolate: bool | None = None,
+    plain_output: bool = False,
 ) -> Path:
     """
     Process LST tracking calculation results.
@@ -63,6 +66,9 @@ def tracking_process(
     interpolate : Optional[bool]
         Use parabolic interpolation for peak refinement.
         If None, falls back to ``cfg.processing.interpolate``.
+    plain_output : bool
+        If True, use line-by-line text output instead of rich progress bars
+        where supported.
 
     Returns
     -------
@@ -94,10 +100,7 @@ def tracking_process(
     # discover tracking directories (kc_*)
     # --------------------------------------------------
     if kc_dirs is None:
-        kc_dirs = sorted(
-            d for d in work_dir.iterdir()
-            if d.is_dir() and d.name.startswith("kc_")
-        )
+        kc_dirs = discover_pattern_dirs(work_dir, "kc_*")
 
     # nothing found to process, so just return the working directory
     if not kc_dirs:
@@ -115,15 +118,31 @@ def tracking_process(
 
         total_files = 0
 
-        for kc_dir in kc_dirs:
-            typer.echo(f"- {kc_dir.name}")
-            written = extract_maxima(
-                kc_dir,
-                interpolate=use_interpolate,
-                gate_tol=gate_tol,
-                min_valid=min_valid,
-            )
-            total_files += len(written)
+        if plain_output:
+            for kc_dir in kc_dirs:
+                typer.echo(f"- {kc_dir.name}")
+                written = extract_maxima(
+                    kc_dir,
+                    interpolate=use_interpolate,
+                    gate_tol=gate_tol,
+                    min_valid=min_valid,
+                )
+                total_files += len(written)
+        else:
+            with progress(
+                total=len(kc_dirs),
+                description="process.tracking.maxima",
+                persist=True,
+            ) as advance:
+                for kc_dir in kc_dirs:
+                    written = extract_maxima(
+                        kc_dir,
+                        interpolate=use_interpolate,
+                        gate_tol=gate_tol,
+                        min_valid=min_valid,
+                    )
+                    total_files += len(written)
+                    advance()
 
         typer.echo(f"maxima extraction complete: {total_files} file(s) written")
 
@@ -135,7 +154,7 @@ def tracking_process(
 
         typer.echo("starting volume assembly...")
 
-        vol_path = assemble_volume(work_dir)
+        vol_path = assemble_volume(work_dir, plain_output=plain_output)
 
         if vol_path is not None:
             typer.echo(f"volume assembly complete: {vol_path.name}")

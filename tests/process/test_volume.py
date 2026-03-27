@@ -55,6 +55,11 @@ def test_parse_kc_value() -> None:
     assert volume._parse_kc_value("kc_0045pt25") == 45.25
 
 
+def test_parse_kc_value_non_kc_prefix() -> None:
+    """Parse case value from directory names with non-kc prefixes."""
+    assert volume._parse_kc_value("slice_0045pt25") == 45.25
+
+
 def test_assemble_volume_no_kc_dirs_returns_none(tmp_path: Path) -> None:
     """Return None when no kc_* directories exist."""
     out = volume.assemble_volume(tmp_path)
@@ -68,6 +73,47 @@ def test_assemble_volume_no_completed_slices_returns_none(tmp_path: Path) -> Non
 
     out = volume.assemble_volume(tmp_path)
     assert out is None
+
+
+def test_assemble_volume_custom_dir_pattern(tmp_path: Path, monkeypatch) -> None:
+    """Allow custom directory discovery pattern via dir_pattern."""
+    case1 = tmp_path / "slice_0001pt00"
+    case2 = tmp_path / "slice_0002pt00"
+    case1.mkdir()
+    case2.mkdir()
+
+    (case1 / "growth_rate_with_nfact_amps.dat").write_text("dummy", encoding="utf-8")
+    (case2 / "growth_rate_with_nfact_amps.dat").write_text("dummy", encoding="utf-8")
+
+    tp = _build_slice_data(
+        x_vals=np.array([0.100, 0.200, 0.300]),
+        f_vals=np.array([1000.0, 2000.0]),
+    )
+
+    monkeypatch.setattr(volume, "_NX_COMMON", 5)
+    monkeypatch.setattr(volume, "_FREQ_SPACING", 1000.0)
+    monkeypatch.setattr(volume, "read_tecplot_ascii", lambda _path: tp)
+
+    captured: dict[str, object] = {}
+
+    def _fake_write(
+        path: Path,
+        data: dict[str, np.ndarray],
+        title: str,
+        zone: str,
+        progress_callback=None,
+    ) -> None:
+        captured["path"] = path
+        captured["data"] = data
+        captured["title"] = title
+        captured["zone"] = zone
+
+    monkeypatch.setattr(volume, "write_tecplot_ascii", _fake_write)
+
+    out_path = volume.assemble_volume(tmp_path, dir_pattern="slice_*")
+
+    assert out_path == tmp_path / "lst_vol.dat"
+    assert captured["path"] == out_path
 
 
 def test_assemble_volume_writes_3d_file_and_keeps_frequency_valid(
@@ -109,7 +155,13 @@ def test_assemble_volume_writes_3d_file_and_keeps_frequency_valid(
     captured: dict[str, object] = {}
 
     # capture writer payload
-    def _fake_write(path: Path, data: dict[str, np.ndarray], title: str, zone: str) -> None:
+    def _fake_write(
+        path: Path,
+        data: dict[str, np.ndarray],
+        title: str,
+        zone: str,
+        progress_callback=None,
+    ) -> None:
         captured["path"] = path
         captured["data"] = data
         captured["title"] = title

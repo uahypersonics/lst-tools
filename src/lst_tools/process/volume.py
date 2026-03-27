@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,8 @@ from scipy.interpolate import interp1d
 import typer
 
 from lst_tools.data_io import read_tecplot_ascii, write_tecplot_ascii
+from lst_tools.utils.progress import progress
+from ._discover import discover_pattern_dirs
 
 # --------------------------------------------------
 # set up logger
@@ -52,13 +55,18 @@ def assemble_volume(
     parent_dir: str | Path,
     solution_fname: str = _SOLUTION_FNAME,
     output_fname: str = "lst_vol.dat",
+    plain_output: bool = False,
+    dir_pattern: str = "kc_*",
 ) -> Path | None:
-    """Combine 2-D tracking slices from kc_* dirs into a 3-D volume.
+    """Combine 2-D tracking slices from matching case dirs into a 3-D volume.
 
     Args:
-        parent_dir: directory containing the kc_* subdirectories.
+        parent_dir: directory containing tracking case subdirectories.
         solution_fname: name of the solution file inside each kc_* dir.
         output_fname: name of the 3-D output file.
+        plain_output: if True, print plain text directory progress instead of
+            showing a rich progress bar.
+        dir_pattern: glob pattern used to discover case directories.
 
     Returns:
         Path to the written volume file, or None if no valid slices found.
@@ -66,34 +74,32 @@ def assemble_volume(
     parent_dir = Path(parent_dir)
 
     # --------------------------------------------------
-    # discover and sort kc_* directories
+    # discover and sort matching case directories
     # --------------------------------------------------
-    kc_dirs = sorted(
-        d for d in parent_dir.iterdir()
-        if d.is_dir() and d.name.startswith("kc_")
-    )
+    kc_dirs = discover_pattern_dirs(parent_dir, dir_pattern)
 
     if not kc_dirs:
-        logger.warning("no kc_* directories found in %s", parent_dir)
+        logger.warning(
+            "no case directories found in %s for pattern %s",
+            parent_dir,
+            dir_pattern,
+        )
         return None
 
-    logger.info("found %d kc_* directories", len(kc_dirs))
+    logger.info("found %d case directories for pattern %s", len(kc_dirs), dir_pattern)
 
     # --------------------------------------------------
     # first pass: read all slices, determine global x/f range
     # --------------------------------------------------
     slices: list[_SliceData] = []
 
-    for kc_dir in kc_dirs:
-
-        # output for user to track progress
-        typer.echo(f"- {kc_dir.name}")
-
+    # process each kc directory and collect valid slices
+    def _process_one_slice(kc_dir: Path) -> None:
         sol_path = kc_dir / solution_fname
 
         if not sol_path.exists():
             logger.info("skipping %s (no %s)", kc_dir.name, solution_fname)
-            continue
+            return
 
         # read tecplot data
         tp = read_tecplot_ascii(sol_path)
@@ -120,6 +126,21 @@ def assemble_volume(
             "read %s: shape (%d freq, %d x-stations)",
             kc_dir.name, data_3d.shape[0], data_3d.shape[1],
         )
+
+    # choose output style based on user preference
+    if plain_output:
+        for kc_dir in kc_dirs:
+            typer.echo(f"- {kc_dir.name}")
+            _process_one_slice(kc_dir)
+    else:
+        with progress(
+            total=len(kc_dirs),
+            description="process.volume.read_slices",
+            persist=True,
+        ) as advance:
+            for kc_dir in kc_dirs:
+                _process_one_slice(kc_dir)
+                advance()
 
     if not slices:
         logger.warning("no completed slices found")
@@ -184,7 +205,6 @@ def assemble_volume(
     for k, slc in enumerate(slices):
 
         nf_orig = slc.data.shape[0]
-        nx_orig = slc.data.shape[1]
 
         # reshape slice data to (nx_orig, nf_orig, nvars) for x-first indexing
         # our data is (nf_orig, nx_orig, nvars) from TecplotData
@@ -263,12 +283,29 @@ def assemble_volume(
         for col, name in enumerate(variables)
     }
 
-    write_tecplot_ascii(
-        output_path,
-        var_dict,
-        title="lst_vol",
-        zone="lst_vol",
-    )
+    # write output with explicit progress so users see activity during large file I/O
+    if plain_output:
+        typer.echo("writing volume data...")
+        write_tecplot_ascii(
+            output_path,
+            var_dict,
+            title="lst_vol",
+            zone="lst_vol",
+        )
+    else:
+        total_points = nx * nf * n_kc
+        with progress(
+            total=total_points,
+            description="process.volume.write_data",
+            persist=True,
+        ) as advance:
+            write_tecplot_ascii(
+                output_path,
+                var_dict,
+                title="lst_vol",
+                zone="lst_vol",
+                progress_callback=advance,
+            )
 
     logger.info("wrote volume: %s (I=%d, J=%d, K=%d)", output_path, nx, nf, n_kc)
 
@@ -303,11 +340,17 @@ class _SliceData:
 
 
 def _parse_kc_value(dirname: str) -> float:
-    """Extract the numeric kc value from a directory name like 'kc_0045pt00'.
+    """Extract the numeric case value from directory names ending in ``NNNptMM``.
 
     Returns:
         The kc value as a float (e.g. 45.0).
     """
-    # strip 'kc_' prefix, replace 'pt' with '.', convert to float
-    num_str = dirname[3:].replace("pt", ".")
+    # parse the final numeric token so names like kc_0045pt00 and
+    # slice_0045pt00 both resolve to 45.0
+    match = re.search(r"(\d+pt\d+)$", dirname)
+    if match is None:
+        raise ValueError(f"cannot parse case value from directory name: {dirname}")
+
+    # replace the in-name decimal token and convert
+    num_str = match.group(1).replace("pt", ".")
     return float(num_str)

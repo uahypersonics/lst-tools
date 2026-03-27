@@ -31,6 +31,7 @@ class TestTrackingProcessCLI:
             do_volume=True,
             kc_dirs=None,
             interpolate=None,
+            plain_output=False,
         )
 
     @patch("lst_tools.cli.cmd_tracking_process.tracking_process")
@@ -86,6 +87,16 @@ class TestTrackingProcessCLI:
         result_no = runner.invoke(cli, ["process", "tracking", "--no-interpolate"])
         assert result_no.exit_code == 0
         assert mock_tracking_process.call_args.kwargs["interpolate"] is False
+
+    @patch("lst_tools.cli.cmd_tracking_process.tracking_process")
+    @patch("lst_tools.cli.cmd_tracking_process.read_config")
+    def test_plain_output_flag(self, mock_read_config, mock_tracking_process):
+        mock_read_config.return_value = Config()
+
+        result = runner.invoke(cli, ["process", "tracking", "--plain-output"])
+
+        assert result.exit_code == 0
+        assert mock_tracking_process.call_args.kwargs["plain_output"] is True
 
     @patch("lst_tools.cli.cmd_tracking_process.read_config", side_effect=Exception("boom"))
     def test_error_path_returns_nonzero(self, mock_read_config):

@@ -39,7 +39,7 @@ def test_tracking_process_runs_maxima_and_volume_with_config_defaults(
     monkeypatch.setattr("lst_tools.process.tracking.extract_maxima", _fake_extract_maxima)
     monkeypatch.setattr(
         "lst_tools.process.tracking.assemble_volume",
-        lambda work_dir: work_dir / "lst_vol.dat",
+        lambda work_dir, plain_output=False: work_dir / "lst_vol.dat",
     )
 
     # execute
@@ -75,7 +75,10 @@ def test_tracking_process_interpolate_override_and_volume_no_output(
         return []
 
     monkeypatch.setattr("lst_tools.process.tracking.extract_maxima", _fake_extract_maxima)
-    monkeypatch.setattr("lst_tools.process.tracking.assemble_volume", lambda _: None)
+    monkeypatch.setattr(
+        "lst_tools.process.tracking.assemble_volume",
+        lambda _, plain_output=False: None,
+    )
 
     # execute
     tracking_process(
@@ -116,3 +119,90 @@ def test_tracking_process_volume_only_mode(tmp_path: Path, monkeypatch) -> None:
 
     assert called["maxima"] == 0
     assert called["volume"] == 1
+
+
+def test_tracking_process_plain_output_forwarded(tmp_path: Path, monkeypatch) -> None:
+    """Forward plain_output flag to volume assembly."""
+    kc = tmp_path / "kc_0000pt00"
+    kc.mkdir()
+
+    captured: dict[str, object] = {}
+
+    def _fake_volume(work_dir: Path, plain_output: bool = False):
+        captured["work_dir"] = work_dir
+        captured["plain_output"] = plain_output
+        return tmp_path / "lst_vol.dat"
+
+    monkeypatch.setattr("lst_tools.process.tracking.extract_maxima", lambda *args, **kwargs: [])
+    monkeypatch.setattr("lst_tools.process.tracking.assemble_volume", _fake_volume)
+
+    tracking_process(work_dir=tmp_path, do_maxima=False, do_volume=True, plain_output=True)
+
+    assert captured == {
+        "work_dir": tmp_path,
+        "plain_output": True,
+    }
+
+
+def test_tracking_process_maxima_uses_progress_by_default(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Use progress context for maxima when plain_output is False."""
+    kc1 = tmp_path / "kc_0000pt00"
+    kc2 = tmp_path / "kc_0010pt00"
+    kc1.mkdir()
+    kc2.mkdir()
+
+    captured: dict[str, object] = {
+        "total": None,
+        "desc": None,
+        "persist": None,
+        "advance_calls": 0,
+    }
+
+    class _FakeProgressCtx:
+        def __enter__(self):
+            def _advance(n: int = 1):
+                captured["advance_calls"] += int(n)
+
+            return _advance
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+    def _fake_progress(*, total: int, desc=None, description=None, persist: bool = True, **kwargs):
+        captured["total"] = total
+        captured["desc"] = desc if desc is not None else description
+        captured["persist"] = persist
+        return _FakeProgressCtx()
+
+    monkeypatch.setattr("lst_tools.process.tracking.progress", _fake_progress)
+    monkeypatch.setattr("lst_tools.process.tracking.extract_maxima", lambda *args, **kwargs: [])
+
+    tracking_process(work_dir=tmp_path, do_maxima=True, do_volume=False, plain_output=False)
+
+    assert captured["total"] == 2
+    assert captured["desc"] == "process.tracking.maxima"
+    assert captured["persist"] is True
+    assert captured["advance_calls"] == 2
+
+
+def test_tracking_process_maxima_plain_output_prints_dirs(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    """Print per-directory lines for maxima when plain_output is True."""
+    kc1 = tmp_path / "kc_0000pt00"
+    kc2 = tmp_path / "kc_0010pt00"
+    kc1.mkdir()
+    kc2.mkdir()
+
+    monkeypatch.setattr("lst_tools.process.tracking.extract_maxima", lambda *args, **kwargs: [])
+
+    tracking_process(work_dir=tmp_path, do_maxima=True, do_volume=False, plain_output=True)
+
+    out = capsys.readouterr().out
+    assert "- kc_0000pt00" in out
+    assert "- kc_0010pt00" in out
