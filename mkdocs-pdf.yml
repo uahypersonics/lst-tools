@@ -9,6 +9,7 @@ plugins:
       bib_file: "docs/refs.bib"
   - with-pdf:
       output_path: pdf/lst-tools-documentation.pdf
+      custom_template_path: templates
       author: Christoph Hader
       copyright: BSD-3-Clause
       cover_subtitle: Linear Stability Theory Utilities
