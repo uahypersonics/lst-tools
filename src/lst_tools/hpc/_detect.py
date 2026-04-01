@@ -214,6 +214,25 @@ def _detect_resources(
         logger.warning("%s failed: %s", " ".join(cmd), e)
         return []
     except OSError as e:
+        # some clusters expose show_usage via shell wrappers/aliases that are
+        # not directly exec-able by subprocess(list). try one shell-mediated
+        # fallback for Exec format errors.
+        if e.errno == 8 and len(cmd) == 1:
+            try:
+                out = subprocess.check_output(cmd[0], text=True, shell=True)
+                logger.info(
+                    "%s direct exec failed (%s), recovered via shell fallback",
+                    " ".join(cmd),
+                    e,
+                )
+                return parser(out)
+            except Exception as shell_e:
+                logger.warning(
+                    "%s shell fallback failed: %s",
+                    " ".join(cmd),
+                    shell_e,
+                )
+
         logger.warning(
             "%s could not be executed (%s) => cannot detect resources",
             " ".join(cmd),

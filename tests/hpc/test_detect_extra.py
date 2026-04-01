@@ -129,14 +129,26 @@ def test_detect_resources_fallback_show_usage_and_errors(monkeypatch) -> None:
     rows_failed = detect_mod._detect_resources(None)
     assert rows_failed == []
 
-    # third: command exists but is not executable format (Errno 8)
+    # third: command exists but is not directly executable; shell fallback works
+    monkeypatch.setattr(detect_mod, "parse_show_usage_output", lambda out: [{"account": "AFOSR"}])
+
+    def _execfmt_then_shell_ok(*args, **kwargs):
+        if kwargs.get("shell"):
+            return "mock shell output"
+        raise OSError(8, "Exec format error")
+
+    monkeypatch.setattr(detect_mod.subprocess, "check_output", _execfmt_then_shell_ok)
+    rows_execfmt_shell_ok = detect_mod._detect_resources(None)
+    assert rows_execfmt_shell_ok == [{"account": "AFOSR"}]
+
+    # fourth: command exists but shell fallback also fails
     monkeypatch.setattr(
         detect_mod.subprocess,
         "check_output",
         lambda *a, **k: (_ for _ in ()).throw(OSError(8, "Exec format error")),
     )
-    rows_execfmt = detect_mod._detect_resources(None)
-    assert rows_execfmt == []
+    rows_execfmt_fail = detect_mod._detect_resources(None)
+    assert rows_execfmt_fail == []
 
 
 def test_detect_uses_profile_over_runtime_probes(monkeypatch) -> None:
