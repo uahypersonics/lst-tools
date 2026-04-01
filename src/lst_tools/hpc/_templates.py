@@ -53,6 +53,8 @@ def render_slurm(
         lines.append(f"#SBATCH --qos={job.qos}")
     if job.constraint:
         lines.append(f"#SBATCH --constraint={job.constraint}")
+    if job.extra_sbatch:
+        lines.extend(job.extra_sbatch)
 
     # working directory
     workdir = job.workdir or "${SLURM_SUBMIT_DIR}"
@@ -157,6 +159,12 @@ def render_pbs(
                 lines.append(f"module load {mod}")
             else:
                 lines.append(f"module load {mod}")
+        lines.append("")
+
+    # profile-provided setup commands
+    if job.extra_pbs:
+        for line in job.extra_pbs:
+            lines.append(line)
         lines.append("")
 
     # extra env

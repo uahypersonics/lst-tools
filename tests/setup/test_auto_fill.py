@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import math
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
 import pytest
 
 from lst_tools.config.schema import Config
-from lst_tools.setup.parsing import auto_fill_parsing
+from lst_tools.setup.parsing import auto_fill_parsing, parsing_setup
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +320,28 @@ class TestAutoFillParsing:
         auto_fill_parsing(cfg)
 
         assert cfg.lst.params.f_max == 100000
+
+    @patch("lst_tools.setup.parsing.resolve_config")
+    @patch("lst_tools.setup.parsing.hpc_configure")
+    @patch("lst_tools.setup.parsing.generate_lst_input_deck")
+    def test_parsing_setup_warns_when_not_simplified(
+        self,
+        mock_generate,
+        mock_hpc,
+        mock_resolve,
+        tmp_path,
+        caplog,
+    ):
+        cfg = _make_config(baseflow_input=str(tmp_path / "meanflow.bin"))
+        cfg.lst.solver.is_simplified = False
+        mock_generate.return_value = tmp_path / "lst_input.dat"
+        mock_hpc.return_value = SimpleNamespace(scheduler="unknown")
+        mock_resolve.return_value = cfg
+
+        with caplog.at_level(logging.WARNING, logger="lst_tools"):
+            parsing_setup(cfg=cfg, out_dir=tmp_path)
+
+        assert "is_simplified = false" in caplog.text
 
     @patch("lst_tools.setup.parsing.read_baseflow_stations", return_value=STATIONS_50)
     def test_f_max_fallback_when_mach_missing(self, mock_read, tmp_path):

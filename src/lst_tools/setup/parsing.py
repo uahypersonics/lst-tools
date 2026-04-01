@@ -376,6 +376,13 @@ def parsing_setup(
 
     cfg = resolve_config(cfg)
 
+    # validate parsing solver mode
+    if not cfg.lst.solver.is_simplified:
+        logger.warning(
+            "parsing setup detected lst.solver.is_simplified = false; "
+            "parsing runs are expected to use true"
+        )
+
     # auto-fill unset fields for parsing step
     if auto_fill:
         auto_fill_parsing(cfg, force=force, cfg_path=cfg_path)

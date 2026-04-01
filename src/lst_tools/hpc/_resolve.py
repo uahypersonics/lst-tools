@@ -47,6 +47,8 @@ class ResolvedJob:
     scheduler: str | None = None
     launcher: str | None = None
     modules: tuple[str, ...] = ()
+    extra_sbatch: tuple[str, ...] = ()
+    extra_pbs: tuple[str, ...] = ()
     fname_run_script: str | None = None
 
     # convenience helpers (same surface as the old HPCcfg)
@@ -181,15 +183,15 @@ def resolve(
         if env.resources and account not in known:
             logger.warning("account '%s' not found in detected resources.", account)
 
-    # partition default
-    if partition is None:
-        acct_upper = (account or "").upper()
-        partition = "frontier" if "FX" in acct_upper else "standard"
+    # keep partition unset when not provided by user or detected resources
+    # so the scheduler can apply cluster defaults
 
     # modules / mem_per_cpu from profile
     profile = env.profile
     modules: tuple[str, ...] = profile.modules if profile else ()
     mem_per_cpu: str | None = profile.mem_per_cpu if profile else None
+    extra_sbatch: tuple[str, ...] = profile.extra_sbatch if profile else ()
+    extra_pbs: tuple[str, ...] = profile.extra_pbs if profile else ()
 
     # launcher override from profile (e.g. carpenter → aprun)
     if profile is not None:
@@ -214,6 +216,8 @@ def resolve(
         scheduler=str(scheduler),
         launcher=launcher,
         modules=modules,
+        extra_sbatch=extra_sbatch,
+        extra_pbs=extra_pbs,
         fname_run_script=fname,
         job_name="lst",
     )

@@ -41,6 +41,14 @@ class TestLookup:
         assert p.cpus_per_node == 48
         assert p.preferred_launcher == "aprun"
 
+    def test_warhawk(self):
+        p = lookup("warhawk")
+        assert p is not None
+        assert p.scheduler is Scheduler.PBS
+        assert p.cpus_per_node == 128
+        assert p.preferred_launcher == "aprun"
+        assert "module swap cray-mpich cray-mpich-ucx" in p.extra_pbs
+
     def test_unknown_returns_none(self):
         assert lookup("totally_unknown_cluster") is None
 

@@ -118,3 +118,22 @@ _register(
         mem_per_cpu=None,
     )
 )
+
+# warhawk
+_register(
+    ClusterProfile(
+        name="warhawk",
+        login_aliases=(),
+        scheduler=Scheduler.PBS,
+        cpus_per_node=128,
+        preferred_launcher="aprun",
+        resource_cmd="show_usage",
+        modules=(),
+        mem_per_cpu=None,
+        extra_pbs=(
+            'setenv LD_LIBRARY_PATH "$HOME/lib:$LD_LIBRARY_PATH"',
+            "setenv UCX_WARN_UNUSED_ENV_VARS n",
+            "module swap cray-mpich cray-mpich-ucx",
+        ),
+    )
+)

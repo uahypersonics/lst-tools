@@ -156,6 +156,20 @@ class TestRenderPbs:
         with pytest.raises(ValueError, match="nodes"):
             render_pbs(_pbs_job(nodes=None))
 
+    def test_profile_extra_pbs_lines(self):
+        text = render_pbs(
+            _pbs_job(
+                extra_pbs=(
+                    'setenv LD_LIBRARY_PATH "$HOME/lib:$LD_LIBRARY_PATH"',
+                    "setenv UCX_WARN_UNUSED_ENV_VARS n",
+                    "module swap cray-mpich cray-mpich-ucx",
+                )
+            )
+        )
+        assert 'setenv LD_LIBRARY_PATH "$HOME/lib:$LD_LIBRARY_PATH"' in text
+        assert "setenv UCX_WARN_UNUSED_ENV_VARS n" in text
+        assert "module swap cray-mpich cray-mpich-ucx" in text
+
 
 # ------------------------------------------------------------------
 # dispatcher

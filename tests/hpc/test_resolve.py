@@ -124,13 +124,11 @@ class TestResolve:
         job = resolve(env, {"account": "explicit"})
         assert job.account == "explicit"
 
-    def test_partition_frontier_for_fx(self):
-        # "FX" in account triggers frontier partition *only* when
-        # the resource row doesn't already specify a partition
-        row = {**_RESOURCE_ROW, "account": "myFXacct", "partition": None}
+    def test_partition_remains_unset_when_not_detected(self):
+        row = {**_RESOURCE_ROW, "partition": None}
         env = _make_env(resources=(row,))
         job = resolve(env)
-        assert job.partition == "frontier"
+        assert job.partition is None
 
     def test_fname_run_script_slurm(self):
         env = _make_env(hostname="puma")
@@ -157,3 +155,12 @@ class TestResolve:
         env = _make_env(hostname="puma", profile=profile)
         job = resolve(env)
         assert job.mem_per_cpu == "1gb"
+
+    def test_profile_extra_pbs(self):
+        from lst_tools.hpc._profiles import lookup
+
+        profile = lookup("warhawk")
+        env = _make_env(hostname="warhawk", profile=profile)
+        job = resolve(env)
+        assert "module swap cray-mpich cray-mpich-ucx" in job.extra_pbs
+        assert job.launcher == "aprun"
