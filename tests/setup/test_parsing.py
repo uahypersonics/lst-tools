@@ -110,6 +110,19 @@ class TestParsingCLI:
 
     @patch("lst_tools.cli.cmd_parsing.parsing_setup")
     @patch("lst_tools.cli.cmd_parsing.read_config")
+    def test_warning_is_shown_without_verbose(self, mock_read_config, mock_parsing_setup):
+        cfg = Config()
+        cfg.lst.solver.is_simplified = False
+        mock_read_config.return_value = cfg
+        mock_parsing_setup.return_value = "written_file_path"
+
+        result = runner.invoke(cli, ["setup", "parsing"])
+        assert result.exit_code == 0
+        plain = _ANSI_RE.sub("", result.output)
+        assert "warning: lst.solver.is_simplified=false" in plain
+
+    @patch("lst_tools.cli.cmd_parsing.parsing_setup")
+    @patch("lst_tools.cli.cmd_parsing.read_config")
     def test_run_debug_output(self, mock_read_config, mock_parsing_setup, caplog):
         mock_read_config.return_value = Config()
         mock_parsing_setup.return_value = "written_file_path"

@@ -70,6 +70,14 @@ def cmd_parsing(
         # load config (read_config.py in /config/)
         config = read_config(path=cfg)
 
+        # always show this warning to users in CLI output
+        if not config.lst.solver.is_simplified:
+            typer.secho(
+                "warning: lst.solver.is_simplified=false; parsing runs are expected to use true",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+
         # resolve cfg_path for write-back (auto-discover if --cfg not given)
         resolved_cfg_path = cfg if cfg is not None else find_config(".")
 
