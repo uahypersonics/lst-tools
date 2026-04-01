@@ -31,6 +31,7 @@ class TestCLIApp:
             "lastrac",
             "setup",
             "process",
+            "visualize",
         ]:
             assert cmd in result.output, f"missing subcommand: {cmd}"
 
@@ -49,7 +50,7 @@ class TestCLIApp:
     def test_subcommand_help(self):
         """Each top-level and nested subcommand responds to --help."""
         # top-level commands
-        for cmd in ["hpc", "init", "lastrac"]:
+        for cmd in ["hpc", "init", "lastrac", "visualize"]:
             result = runner.invoke(cli, [cmd, "--help"])
             assert result.exit_code == 0, f"{cmd} --help failed"
 

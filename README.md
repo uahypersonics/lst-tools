@@ -37,6 +37,10 @@ lst-tools setup spectra
 # post-process results
 lst-tools process tracking
 lst-tools process spectra
+
+# visualize parsing/tracking outputs (via cfd-viz wrappers)
+lst-tools visualize parsing
+lst-tools visualize tracking
 ```
 
 Run `lst-tools --help` for a full list of commands.

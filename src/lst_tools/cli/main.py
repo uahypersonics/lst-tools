@@ -28,6 +28,7 @@ from .cmd_spectra import cmd_spectra
 from .cmd_spectra_process import cmd_spectra_process
 from .cmd_tracking import cmd_tracking
 from .cmd_tracking_process import cmd_tracking_process
+from .cmd_visualize import cmd_visualize_parsing, cmd_visualize_tracking
 
 
 # --------------------------------------------------
@@ -69,6 +70,11 @@ process_app = typer.Typer(
 
 clean_app = typer.Typer(
     help="Remove generated files (parsing, tracking, spectra).",
+    cls=_OrderedGroup,
+)
+
+visualize_app = typer.Typer(
+    help="Visualize LST results.",
     cls=_OrderedGroup,
 )
 
@@ -155,6 +161,7 @@ cli.command(name="info")(cmd_info)
 cli.command(name="lastrac")(cmd_lastrac)
 cli.add_typer(process_app, name="process")
 cli.command(name="hpc")(cmd_hpc)
+cli.add_typer(visualize_app, name="visualize")
 
 # setup subcommands
 setup_app.command(name="parsing")(cmd_parsing)
@@ -169,6 +176,10 @@ process_app.command(name="spectra")(cmd_spectra_process)
 clean_app.command(name="parsing")(cmd_clean_parsing)
 clean_app.command(name="tracking")(cmd_clean_tracking)
 clean_app.command(name="spectra")(cmd_clean_spectra)
+
+# visualize subcommands
+visualize_app.command(name="parsing")(cmd_visualize_parsing)
+visualize_app.command(name="tracking")(cmd_visualize_tracking)
 
 
 # --------------------------------------------------

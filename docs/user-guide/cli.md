@@ -136,6 +136,62 @@ Post-process spectra calculation results:
 lst-tools process spectra
 ```
 
+### `visualize parsing`
+
+Render parsing contours via the `cfd-viz` LST renderer:
+
+```bash
+# use default parsing file and defaults
+lst-tools visualize parsing
+
+# explicit input/output paths
+lst-tools visualize parsing \
+	--input growth_rate_with_nfact_amps.dat \
+	--out alpi_contours_parsing
+
+# render one selected k-plane only
+lst-tools visualize parsing --single-k --k-index 1
+
+# choose contour policy and level count
+lst-tools visualize parsing \
+	--levels-policy positive-rounded \
+	--levels-count 60
+```
+
+### `visualize tracking`
+
+Render tracking volume contours via the same `cfd-viz` backend:
+
+```bash
+# use default tracking volume file and defaults
+lst-tools visualize tracking
+
+# explicit input/output paths
+lst-tools visualize tracking \
+	--input lst_vol.dat \
+	--out viz_tracking
+
+# custom field and variable mapping
+lst-tools visualize tracking \
+	--field "-im(alpha)" \
+	--xvar s \
+	--yvar "freq,freq." \
+	--kvar beta
+```
+
+Tracking fallback behavior:
+
+1. If `lst_vol.dat` exists, `lst-tools visualize tracking` renders directly from it.
+2. If `lst_vol.dat` is missing, it discovers `kc_*` directories and reads
+	`growth_rate_with_nfact_amps.dat` from each completed case.
+3. In fallback mode, output PNGs are written to `alpi_contours_tracking/`
+	in the current working directory with a shared contour scale across all
+	discovered cases.
+
+!!! note
+		The `visualize` wrappers call `cfd-viz` internally. Install `cfd-viz`
+		in the same Python environment as `lst-tools`.
+
 ### `hpc`
 
 Generate run scripts for HPC systems:
