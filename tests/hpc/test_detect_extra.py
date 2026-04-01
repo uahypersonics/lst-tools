@@ -129,6 +129,15 @@ def test_detect_resources_fallback_show_usage_and_errors(monkeypatch) -> None:
     rows_failed = detect_mod._detect_resources(None)
     assert rows_failed == []
 
+    # third: command exists but is not executable format (Errno 8)
+    monkeypatch.setattr(
+        detect_mod.subprocess,
+        "check_output",
+        lambda *a, **k: (_ for _ in ()).throw(OSError(8, "Exec format error")),
+    )
+    rows_execfmt = detect_mod._detect_resources(None)
+    assert rows_execfmt == []
+
 
 def test_detect_uses_profile_over_runtime_probes(monkeypatch) -> None:
     """When hostname matches a profile, detect() should use profile settings."""

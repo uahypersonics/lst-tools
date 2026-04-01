@@ -213,6 +213,13 @@ def _detect_resources(
     except subprocess.CalledProcessError as e:
         logger.warning("%s failed: %s", " ".join(cmd), e)
         return []
+    except OSError as e:
+        logger.warning(
+            "%s could not be executed (%s) => cannot detect resources",
+            " ".join(cmd),
+            e,
+        )
+        return []
 
 
 # --------------------------------------------------
