@@ -52,7 +52,7 @@ GEOMETRY_TEMPLATES: dict[GeometryPreset, dict] = {
             "is_body_fitted": False,
         },
         "lst": {
-            "solver": {"generalized": 0},
+            "solver": {"generalized": 1},
             "options": {"geometry_switch": 0, "longitudinal_curvature": 0},
         },
     },

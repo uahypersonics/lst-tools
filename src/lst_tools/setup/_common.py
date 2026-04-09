@@ -69,7 +69,7 @@ def resolve_config(cfg: Mapping[str, Any] | None) -> Any:
 
     if errors:
         raise ValueError(
-            f"found {len(errors)} consistency errors; fix and rerun"
+            f"found {len(errors)} consistency errors; fix and rerun\n\n{report}"
         )
 
     return cfg
