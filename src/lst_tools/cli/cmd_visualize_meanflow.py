@@ -9,7 +9,6 @@ import logging
 from pathlib import Path
 from typing import Annotated
 
-import matplotlib.pyplot as plt
 import numpy as np
 import typer
 
@@ -73,6 +72,14 @@ def _visualize_meanflow(
     shifted horizontally so the boundary layer growth is visible.
     One figure per variable: u/u_e, w/w_e (if crossflow), T/T_e.
     """
+
+    # import plotting dependency only when this command is used
+    try:
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "matplotlib is required for 'lst-tools visualize meanflow'"
+        ) from exc
 
     # read profiles from the meanflow binary (equidistant in x)
     n_profiles = 10
