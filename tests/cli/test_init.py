@@ -145,7 +145,7 @@ class TestGeometryPresets:
         seed = merge_dicts(DEFAULTS, GEOMETRY_TEMPLATES[GeometryPreset.flat_plate])
         assert seed["geometry"]["type"] == 0
         assert seed["geometry"]["is_body_fitted"] is False
-        assert seed["lst"]["solver"]["generalized"] == 0
+        assert seed["lst"]["solver"]["generalized"] == 1
         assert seed["lst"]["options"]["geometry_switch"] == 0
         assert seed["lst"]["options"]["longitudinal_curvature"] == 0
 

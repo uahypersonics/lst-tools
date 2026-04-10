@@ -332,7 +332,7 @@ class MeanflowConversion(_ConfigBase):
 class LstSolver(_ConfigBase):
     """LST solver settings."""
     type: int = 1
-    is_simplified: bool = False
+    is_simplified: bool = True
     alpha_i_threshold: float = -100.0
     generalized: int = 0
     spatial_temporal: int = 1
@@ -353,7 +353,7 @@ class LstSolver(_ConfigBase):
         _ait = d.get("alpha_i_threshold")
         return cls(
             type=int(_type) if _type is not None else 1,
-            is_simplified=_coerce_bool(_is) if _is is not None else False,
+            is_simplified=_coerce_bool(_is) if _is is not None else True,
             alpha_i_threshold=float(_ait) if _ait is not None else -100.0,
             generalized=int(_gen) if _gen is not None else 0,
             spatial_temporal=int(_st) if _st is not None else 1,

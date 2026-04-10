@@ -173,7 +173,7 @@ class TestFromDictValidation:
         })
         assert cfg.lst.solver.type == 1
         assert cfg.lst.params.ny == 100
-        assert cfg.lst.solver.is_simplified is False
+        assert cfg.lst.solver.is_simplified is True
         assert cfg.lst.params.tol_lst == 1e-5
 
     def test_from_dict_unknown_sections_dropped(self):

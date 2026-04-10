@@ -313,15 +313,6 @@ def _check_tracking_geometry(cfg: dict[str, Any]) -> Iterable[Issue]:
                 hint="set geometry.theta_deg in the configuration file",
             )
         )
-    elif theta_deg is None and geometry_type is not None:
-        issues.append(
-            Issue(
-                level=IssueLevel.WARNING,
-                path="geometry.theta_deg",
-                message=f"theta_deg not set for geometry type {geometry_type}; will default to 0",
-                hint="set geometry.theta_deg if a non-zero half-angle is needed",
-            )
-        )
 
     return issues
 

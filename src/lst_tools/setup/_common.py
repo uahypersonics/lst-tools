@@ -118,6 +118,7 @@ def read_baseflow_stations(baseflow_input: str | Path) -> np.ndarray:
 def read_baseflow_profiles(
     baseflow_input: str | Path,
     n_samples: int = 50,
+    spacing: str = "index",
 ) -> dict:
     """Read eta, velocity, and temperature profiles at evenly spaced stations.
 
@@ -132,6 +133,11 @@ def read_baseflow_profiles(
     n_samples : int, optional
         Target number of stations to sample (default 50).
         If the file has fewer stations, all are read.
+    spacing : ``"index"`` or ``"x"``, optional
+        How to distribute the sampled stations (default ``"index"``).
+        ``"index"`` picks indices equidistant in index space.
+        ``"x"`` picks stations equidistant in the streamwise coordinate,
+        which requires a two-pass read of the file.
 
     Returns
     -------
@@ -141,20 +147,54 @@ def read_baseflow_profiles(
         ``vvel`` (list of 1-D arrays), ``wvel`` (list of 1-D arrays),
         ``temp`` (list of 1-D arrays), ``stat_uvel`` (list of floats).
     """
+
+    # ensure input is a Path and open with LastracReader
     path = Path(str(baseflow_input))
     fio = LastracReader(path, endianness="<")
 
+    # read file header
     file_header = fio.read_header()
+
+    # get number of stations available in base flow file
     n_station = int(file_header["n_station"])
 
-    # choose evenly spaced indices
+    # choose which station indices to sample
     if n_station <= n_samples:
+        # guard against requesting more samples than available stations
         sample_idx = set(range(n_station))
+
+    elif spacing == "x":
+        # -- first pass: read all x-coordinates from station headers ---
+        all_x = np.empty(n_station)
+        for i in range(n_station):
+            stn = fio.read_station_header()
+            all_x[i] = float(stn["s"])
+            # skip the 6 profile vectors (eta, u, v, w, T, p)
+            fio.skip_records(6)
+        fio.close()
+
+        # build target x-locations uniformly spaced from first to last
+        x_targets = np.linspace(all_x[0], all_x[-1], n_samples)
+
+        # find the nearest station index for each target x
+        idx_int = [int(np.argmin(np.abs(all_x - xt))) for xt in x_targets]
+
+        # deduplicate while preserving order, then store as set for lookup
+        sample_idx = set(dict.fromkeys(idx_int))
+
+        # re-open the file for the second pass
+        fio = LastracReader(path, endianness="<")
+        fio.read_header()
+
     else:
-        sample_idx = set(
-            int(round(i))
-            for i in np.linspace(0, n_station - 1, n_samples)
-        )
+        # default: equidistant in index space
+        idx_float = np.linspace(0, n_station - 1, n_samples)
+
+        # snap each float index to the nearest integer
+        idx_int = [int(round(i_float)) for i_float in idx_float]
+
+        # store as a set for fast lookup in the loop below
+        sample_idx = set(idx_int)
 
     x_list: list[float] = []
     eta_list: list[np.ndarray] = []

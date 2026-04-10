@@ -147,7 +147,6 @@ def generate_lst_input_deck(
     # coerce optional geometry fields — None means "not applicable" (flat plate)
     theta_deg = cfg.geometry.theta_deg
     if theta_deg is None:
-        logger.warning("no cone half angle specified, defaulting to 0.0 degrees")
         theta_deg = 0.0
 
     geometry_switch = cfg.lst.options.geometry_switch
