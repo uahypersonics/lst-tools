@@ -173,7 +173,7 @@ def _resolve_wavenumbers(cfg) -> np.ndarray:
 
 def _build_case_name(x_loc: float, freq: float, beta: float) -> str:
     """Format a spectra case directory name from physical parameters."""
-    x_str = f"{x_loc:05.2f}".replace(".", "pt")
+    x_str = f"{x_loc:08.5f}".replace(".", "pt")
     f_str = f"{freq / 1000:007.2f}".replace(".", "pt")
 
     if beta >= 0:

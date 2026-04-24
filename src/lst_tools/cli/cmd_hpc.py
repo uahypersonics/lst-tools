@@ -62,7 +62,7 @@ def cmd_hpc(
         # generate run script (logic in /hpc/)
         script_path = script_build(
             hpc_cfg,
-            out_path="./",
+            "./",
             lst_exe=lst_exe,
             args=["lst_input.dat"],
         )

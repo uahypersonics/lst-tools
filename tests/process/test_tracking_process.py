@@ -26,9 +26,9 @@ def test_tracking_process_runs_maxima_and_volume_with_config_defaults(
     kc2.mkdir()
 
     cfg = Config()
-    cfg.processing.interpolate = True
-    cfg.processing.gate_tol = 0.25
-    cfg.processing.min_valid = 12
+    cfg.processing.tracking.interpolate = True
+    cfg.processing.tracking.gate_tol = 0.25
+    cfg.processing.tracking.min_valid = 12
 
     maxima_calls: list[tuple[Path, bool, float, int]] = []
 
@@ -62,9 +62,9 @@ def test_tracking_process_interpolate_override_and_volume_no_output(
     kc.mkdir()
 
     cfg = Config()
-    cfg.processing.interpolate = True
-    cfg.processing.gate_tol = 0.11
-    cfg.processing.min_valid = 7
+    cfg.processing.tracking.interpolate = True
+    cfg.processing.tracking.gate_tol = 0.11
+    cfg.processing.tracking.min_valid = 7
 
     captured: dict[str, object] = {}
 

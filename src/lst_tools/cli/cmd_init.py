@@ -31,6 +31,54 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------
+# helper function to tailor the generated init config
+# --------------------------------------------------
+def _prepare_init_config(cfg_data: dict) -> dict:
+    """Prepare a user-facing init config from the schema defaults."""
+
+    # copy the processing section so init can shape a cleaner scaffold
+    processing_cfg = copy.deepcopy(cfg_data.get("processing", {}))
+
+    # build a spectra block that exposes the most useful gating knobs up front
+    spectra_cfg = copy.deepcopy(processing_cfg.get("spectra", {}))
+    processing_cfg["spectra"] = {
+        "alpr_min": spectra_cfg.get("alpr_min"),
+        "alpr_max": spectra_cfg.get("alpr_max"),
+        "alpi_min": spectra_cfg.get("alpi_min"),
+        "alpi_max": spectra_cfg.get("alpi_max"),
+    }
+
+    # omit parsing until that workflow actually has user-facing options
+    processing_cfg.pop("parsing", None)
+
+    # write the tailored processing block back into the config seed
+    cfg_data["processing"] = processing_cfg
+    return cfg_data
+
+
+def _inject_init_comments(config_text: str) -> str:
+    """Inject short guidance comments into the init-generated TOML text."""
+
+    # build the spectra header replacement once so the output stays stable
+    spectra_header = "[processing.spectra]"
+    spectra_header_with_comments = (
+        "[processing.spectra]\n"
+        "# Optional alpha-space gates for spectra post-processing.\n"
+        "# Leave any bound empty to disable it."
+    )
+
+    # avoid duplicating comments if the helper is applied more than once
+    if spectra_header_with_comments in config_text:
+        return config_text
+
+    return config_text.replace(
+        spectra_header,
+        spectra_header_with_comments,
+        1,
+    )
+
+
+# --------------------------------------------------
 # main function for the 'init' command
 #
 # note: \f truncates docstring for --helpi cli output
@@ -96,6 +144,9 @@ def cmd_init(
     # merge flow conditions into the default config (from --flow path or auto-discovered flow_conditions.dat)
     cfg_init = merge_flow_defaults(default_cfg, flow_path)
 
+    # build a cleaner user-facing init scaffold
+    cfg_init = _prepare_init_config(cfg_init)
+
     # auto-detect HDF5 meanflow file in the current directory
     h5_files = list(Path(".").glob("*.h5")) + list(Path(".").glob("*.hdf5"))
     if len(h5_files) == 1:
@@ -115,6 +166,12 @@ def cmd_init(
         result = write_config(
             out, overwrite=True, cfg_data=cfg_init
         )
+
+        # write short guidance comments into the generated scaffold
+        if result.exists():
+            config_text = result.read_text(encoding="utf-8")
+            config_text = _inject_init_comments(config_text)
+            result.write_text(config_text, encoding="utf-8")
     except Exception as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(1)

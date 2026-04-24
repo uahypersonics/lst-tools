@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 from lst_tools.config.schema import Config
 from lst_tools.config.geometry import GeometryPreset, GEOMETRY_TEMPLATES
 from lst_tools.config.merge import merge_dicts, merge_flow_defaults
+from lst_tools.cli.cmd_init import _inject_init_comments
 from lst_tools.cli.main import cli
 
 DEFAULTS = Config().to_dict()
@@ -81,6 +82,19 @@ class TestInitCommand:
         assert result.exit_code == 0
         mock_write_config.assert_called_once()
 
+        call_kwargs = mock_write_config.call_args
+        cfg_data = call_kwargs.kwargs.get("cfg_data") or call_kwargs[1].get("cfg_data")
+        assert cfg_data is not None
+        assert "tracking" in cfg_data["processing"]
+        assert "spectra" in cfg_data["processing"]
+        assert "parsing" not in cfg_data["processing"]
+        assert cfg_data["processing"]["spectra"] == {
+            "alpr_min": None,
+            "alpr_max": None,
+            "alpi_min": None,
+            "alpi_max": None,
+        }
+
     @patch("lst_tools.cli.cmd_init.write_config")
     def test_init_file_exists_no_force(self, mock_write_config, tmp_path):
         """Ensure that when file exists without --force, a message is shown"""
@@ -97,6 +111,27 @@ class TestInitCommand:
         out_file = tmp_path / "lst.cfg"
         result = runner.invoke(cli, ["init", "--out", str(out_file)])
         assert result.exit_code == 1
+
+
+class TestInitFormatting:
+    def test_inject_init_comments_adds_spectra_guidance_once(self):
+        config_text = (
+            "[processing.tracking]\n"
+            "interpolate = false\n\n"
+            "[processing.spectra]\n"
+            "alpr_min = \"\"\n"
+            "alpr_max = \"\"\n"
+            "alpi_min = \"\"\n"
+            "alpi_max = \"\"\n"
+        )
+
+        updated_text = _inject_init_comments(config_text)
+        updated_text_twice = _inject_init_comments(updated_text)
+
+        assert "# Optional alpha-space gates for spectra post-processing." in updated_text
+        assert "# Leave any bound empty to disable it." in updated_text
+        assert updated_text.count("# Optional alpha-space gates for spectra post-processing.") == 1
+        assert updated_text_twice == updated_text
 
 
 class TestMergeDicts:

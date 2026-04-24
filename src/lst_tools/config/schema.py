@@ -503,20 +503,20 @@ class HpcConfig(_ConfigBase):
 
 
 # --------------------------------------------------
-# Processing dataclass
+# Processing sub-sections
 # --------------------------------------------------
 @dataclasses.dataclass(eq=False)
-# inherit from _ConfigBase to get .to_dict(), .to_toml_dict(), and custom __eq__
-class Processing(_ConfigBase):
+class TrackingProcessing(_ConfigBase):
     """Post-processing settings for tracking results."""
+
     interpolate: bool = False
     gate_tol: float = 0.10
     min_valid: int = 40
     peak_order: int = 1
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> Processing:
-        """Build a ``Processing`` from a plain dict."""
+    def from_dict(cls, d: dict[str, Any]) -> TrackingProcessing:
+        """Build a ``TrackingProcessing`` from a plain dict."""
         _interp = d.get("interpolate")
         _gate = d.get("gate_tol")
         _minv = d.get("min_valid")
@@ -526,6 +526,77 @@ class Processing(_ConfigBase):
             gate_tol=float(_gate) if _gate is not None else 0.10,
             min_valid=int(_minv) if _minv is not None else 40,
             peak_order=int(_peak) if _peak is not None else 1,
+        )
+
+
+@dataclasses.dataclass(eq=False)
+class SpectraProcessing(_ConfigBase):
+    """Post-processing settings for spectra results."""
+
+    alpr_min: float | None = None
+    alpr_max: float | None = None
+    alpi_min: float | None = None
+    alpi_max: float | None = None
+    branch_gate: float = 0.25
+    branch_min_points: int = 2
+    isolation_k: int = 3
+    isolation_threshold: float | None = None
+    classify_min_points: int = 3
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> SpectraProcessing:
+        """Build a ``SpectraProcessing`` from a plain dict."""
+        _alpr_min = d.get("alpr_min")
+        _alpr_max = d.get("alpr_max")
+        _alpi_min = d.get("alpi_min")
+        _alpi_max = d.get("alpi_max")
+        _branch_gate = d.get("branch_gate")
+        _branch_min = d.get("branch_min_points")
+        _iso_k = d.get("isolation_k")
+        _iso_thresh = d.get("isolation_threshold")
+        _class_min = d.get("classify_min_points")
+        return cls(
+            alpr_min=_opt_float(_alpr_min),
+            alpr_max=_opt_float(_alpr_max),
+            alpi_min=_opt_float(_alpi_min),
+            alpi_max=_opt_float(_alpi_max),
+            branch_gate=float(_branch_gate) if _branch_gate is not None else 0.25,
+            branch_min_points=int(_branch_min) if _branch_min is not None else 2,
+            isolation_k=int(_iso_k) if _iso_k is not None else 3,
+            isolation_threshold=_opt_float(_iso_thresh),
+            classify_min_points=int(_class_min) if _class_min is not None else 3,
+        )
+
+
+@dataclasses.dataclass(eq=False)
+class ParsingProcessing(_ConfigBase):
+    """Reserved post-processing settings for parsing results."""
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ParsingProcessing:
+        """Build a ``ParsingProcessing`` from a plain dict."""
+        return cls()
+
+
+# --------------------------------------------------
+# Processing dataclass
+# --------------------------------------------------
+@dataclasses.dataclass(eq=False)
+# inherit from _ConfigBase to get .to_dict(), .to_toml_dict(), and custom __eq__
+class Processing(_ConfigBase):
+    """Grouped post-processing settings."""
+
+    tracking: TrackingProcessing = dataclasses.field(default_factory=TrackingProcessing)
+    spectra: SpectraProcessing = dataclasses.field(default_factory=SpectraProcessing)
+    parsing: ParsingProcessing = dataclasses.field(default_factory=ParsingProcessing)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Processing:
+        """Build a ``Processing`` from a plain dict."""
+        return cls(
+            tracking=TrackingProcessing.from_dict(d.get("tracking", {})),
+            spectra=SpectraProcessing.from_dict(d.get("spectra", {})),
+            parsing=ParsingProcessing.from_dict(d.get("parsing", {})),
         )
 
 

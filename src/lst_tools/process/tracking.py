@@ -51,7 +51,7 @@ def tracking_process(
     ----------
     cfg : Optional[Config]
         Configuration object. Processing defaults come from
-        ``cfg.processing`` (gate_tol, min_valid, peak_order,
+        ``cfg.processing.tracking`` (gate_tol, min_valid, peak_order,
         interpolate).  CLI flags override config values.
     do_maxima : bool
         If True, run ridge-line maxima extraction for every kc_* case.
@@ -65,7 +65,7 @@ def tracking_process(
         kc_* directories in work_dir.
     interpolate : Optional[bool]
         Use parabolic interpolation for peak refinement.
-        If None, falls back to ``cfg.processing.interpolate``.
+        If None, falls back to ``cfg.processing.tracking.interpolate``.
     plain_output : bool
         If True, use line-by-line text output instead of rich progress bars
         where supported.
@@ -85,7 +85,7 @@ def tracking_process(
     # --------------------------------------------------
     # resolve processing settings from config + CLI overrides
     # --------------------------------------------------
-    proc = cfg.processing if cfg is not None else None
+    proc = cfg.processing.tracking if cfg is not None else None
 
     # CLI flag (if explicitly set) overrides config value
     use_interpolate = interpolate if interpolate is not None else (

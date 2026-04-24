@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from typer.testing import CliRunner
 
@@ -37,7 +37,13 @@ class TestSpectraProcessCLI:
         assert result.exit_code == 0
         assert "spectra post-processing complete: spectra_results.dat" in result.output
         mock_read_config.assert_called_once_with(path=None)
-        mock_spectra_process.assert_called_once_with(cfg=mock_cfg)
+        mock_spectra_process.assert_called_once_with(
+            cfg=mock_cfg,
+            reporter=ANY,
+            do_animate=True,
+            do_branches=True,
+            do_classify=False,
+        )
 
     @patch("lst_tools.cli.cmd_spectra_process.spectra_process", side_effect=NotImplementedError("todo"))
     @patch("lst_tools.cli.cmd_spectra_process.read_config")
