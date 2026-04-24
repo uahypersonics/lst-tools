@@ -17,8 +17,8 @@ def test_build_case_name_formats_sign_and_units() -> None:
     pos_name = spectra_setup_mod._build_case_name(0.1, 6000.0, 500.0)
     neg_name = spectra_setup_mod._build_case_name(0.1, 6000.0, -500.0)
 
-    assert pos_name == "x_00pt10_m_f_0006pt00_khz_beta_pos0500pt00"
-    assert neg_name == "x_00pt10_m_f_0006pt00_khz_beta_neg0500pt00"
+    assert pos_name == "x_00pt10000_m_f_0006pt00_khz_beta_pos0500pt00"
+    assert neg_name == "x_00pt10000_m_f_0006pt00_khz_beta_neg0500pt00"
 
 
 def test_resolve_frequencies_builds_array() -> None:
