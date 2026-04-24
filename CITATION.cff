@@ -3,7 +3,7 @@ message: "If you use this software, please cite it as below."
 title: "lst-tools"
 abstract: "Python toolkit with pre- and postprocessing utilities for linear stability theory (LST) code"
 type: software
-version: 0.1.7
+version: 0.1.8
 date-released: 2026-04-24
 authors:
   - family-names: "Hader"
