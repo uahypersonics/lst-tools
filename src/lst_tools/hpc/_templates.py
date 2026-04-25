@@ -179,9 +179,16 @@ def render_pbs(
     launcher = job.launcher or "mpirun"
     flag = "-n" if launcher == "aprun" else "-np"
 
+    # clean args (strip redirections — we add our own >run.log)
+    clean_args: list[str] = []
+    for a in args or []:
+        if not a.startswith(">") and not a.startswith(">>"):
+            clean_args.append(a)
+
     cmd = f"{launcher} {flag} {total_ranks} {lst_exe}"
-    for arg in args or []:
-        cmd += f" {arg}"
+    if clean_args:
+        cmd += " " + " ".join(clean_args)
+    cmd += " >run.log"
 
     lines.extend(["", cmd, ""])
     lines.append(f"{launcher} {flag} 1 rm -f log_proc*")
