@@ -4,7 +4,7 @@ Pre- and post-processing toolkit for Linear Stability Theory (LST) analyses of h
 
 [![Test](https://github.com/uahypersonics/lst-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/uahypersonics/lst-tools/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/uahypersonics/lst-tools/branch/main/graph/badge.svg)](https://codecov.io/gh/uahypersonics/lst-tools)
-[![DOI](https://img.shields.io/badge/DOI-pending-lightgrey)](https://zenodo.org/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19271736.svg)](https://doi.org/10.5281/zenodo.19271736)
 [![PyPI](https://img.shields.io/pypi/v/lst-tools)](https://pypi.org/project/lst-tools/)
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://uahypersonics.github.io/lst-tools/)
 [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](LICENSE)

@@ -12,6 +12,7 @@ authors:
     orcid: "https://orcid.org/0000-0002-0956-000X"
 repository-code: "https://github.com/uahypersonics/lst-tools"
 url: "https://uahypersonics.github.io/lst-tools"
+doi: "10.5281/zenodo.19271736"
 license: BSD-3-Clause
 keywords:
   - linear stability theory
