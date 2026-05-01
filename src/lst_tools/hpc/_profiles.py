@@ -90,17 +90,23 @@ _register(
 )
 
 # carpenter
+# ERDC HPE Cray EX4000, AMD EPYC 9654 Genoa: 192 cores per node (96 × 2 sockets)
 _register(
     ClusterProfile(
         name="carpenter",
         login_aliases=(),
         scheduler=Scheduler.PBS,
-        cpus_per_node=48,
+        cpus_per_node=192,
         default_partition="standard",
         preferred_launcher="aprun",
         resource_cmd="show_usage",
         modules=(),
         mem_per_cpu=None,
+        extra_pbs=(
+            # Slingshot 11 fabric: hybrid match mode keeps message rate up
+            # for jobs with many small messages.
+            "setenv FI_CXI_RX_MATCH_MODE hybrid",
+        ),
     )
 )
 

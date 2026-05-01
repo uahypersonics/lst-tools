@@ -38,8 +38,9 @@ class TestLookup:
         p = lookup("carpenter")
         assert p is not None
         assert p.scheduler is Scheduler.PBS
-        assert p.cpus_per_node == 48
+        assert p.cpus_per_node == 192
         assert p.preferred_launcher == "aprun"
+        assert "setenv FI_CXI_RX_MATCH_MODE hybrid" in p.extra_pbs
 
     def test_warhawk(self):
         p = lookup("warhawk")
