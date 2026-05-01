@@ -111,14 +111,15 @@ _register(
 )
 
 # nautilus
+# NAVY Penguin Computing TrueHPC, AMD 7713 Milan: 128 cores/node, Slurm.
 _register(
     ClusterProfile(
         name="nautilus",
         login_aliases=(),
-        scheduler=Scheduler.PBS,
-        cpus_per_node=64,
+        scheduler=Scheduler.SLURM,
+        cpus_per_node=128,
         default_partition="standard",
-        preferred_launcher="mpirun",
+        preferred_launcher="srun",
         resource_cmd="show_usage",
         modules=(),
         mem_per_cpu=None,
