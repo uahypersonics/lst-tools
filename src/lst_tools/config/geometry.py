@@ -49,7 +49,7 @@ GEOMETRY_TEMPLATES: dict[GeometryPreset, dict] = {
     GeometryPreset.flat_plate: {
         "geometry": {
             "type": 0,
-            "is_body_fitted": False,
+            "is_body_fitted": True,
         },
         "lst": {
             "solver": {"generalized": 1},
