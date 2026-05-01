@@ -40,6 +40,8 @@ class TestLookup:
         assert p.scheduler is Scheduler.PBS
         assert p.cpus_per_node == 192
         assert p.preferred_launcher == "aprun"
+        assert p.default_partition == "standard"
+        assert p.fx_partition == "frontier"
         assert "setenv FI_CXI_RX_MATCH_MODE hybrid" in p.extra_pbs
 
     def test_warhawk(self):

@@ -130,6 +130,52 @@ class TestResolve:
         job = resolve(env)
         assert job.partition is None
 
+    def test_partition_falls_back_to_profile_default(self):
+        """When no user/detected partition, profile.default_partition is used."""
+        from lst_tools.hpc._profiles import lookup
+
+        profile = lookup("carpenter")
+        env = _make_env(
+            hostname="carpenter",
+            scheduler=Scheduler.PBS,
+            cpus_per_node=192,
+            profile=profile,
+        )
+        job = resolve(env, user_hpc={"account": "AFOSR12345YST"})
+        # non-FX account routes to the profile default
+        assert job.partition == "standard"
+
+    def test_partition_fx_rule_routes_to_frontier(self):
+        """Carpenter accounts ending in 'FX' should land in the frontier queue."""
+        from lst_tools.hpc._profiles import lookup
+
+        profile = lookup("carpenter")
+        env = _make_env(
+            hostname="carpenter",
+            scheduler=Scheduler.PBS,
+            cpus_per_node=192,
+            profile=profile,
+        )
+        job = resolve(env, user_hpc={"account": "AFOSR26292YFX"})
+        assert job.partition == "frontier"
+
+    def test_user_partition_overrides_fx_rule(self):
+        """An explicit [hpc] partition wins over the FX heuristic."""
+        from lst_tools.hpc._profiles import lookup
+
+        profile = lookup("carpenter")
+        env = _make_env(
+            hostname="carpenter",
+            scheduler=Scheduler.PBS,
+            cpus_per_node=192,
+            profile=profile,
+        )
+        job = resolve(
+            env,
+            user_hpc={"account": "AFOSR26292YFX", "partition": "debug"},
+        )
+        assert job.partition == "debug"
+
     def test_fname_run_script_slurm(self):
         env = _make_env(hostname="puma")
         job = resolve(env)

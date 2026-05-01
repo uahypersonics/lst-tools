@@ -39,6 +39,10 @@ class ClusterProfile:
     scheduler: Scheduler = Scheduler.UNKNOWN
     cpus_per_node: int = 1
     default_partition: str = "standard"
+    # site-specific override applied when the project/account number ends in "FX"
+    # (e.g. ERDC AFOSR allocations route to the 'frontier' queue on Carpenter).
+    # leave as None on clusters that don't have such a rule.
+    fx_partition: str | None = None
     preferred_launcher: str = "mpirun"
     resource_cmd: str | None = None
     modules: tuple[str, ...] = ()
@@ -98,6 +102,8 @@ _register(
         scheduler=Scheduler.PBS,
         cpus_per_node=192,
         default_partition="standard",
+        # ERDC routes AFOSR (project ends in 'FX') jobs to the frontier queue
+        fx_partition="frontier",
         preferred_launcher="aprun",
         resource_cmd="show_usage",
         modules=(),

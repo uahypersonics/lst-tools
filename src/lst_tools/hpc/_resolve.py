@@ -197,6 +197,28 @@ def resolve(
     if profile is not None:
         launcher = profile.preferred_launcher
 
+    # partition fallback chain (only fills when not already set above):
+    #   1) site-specific FX rule (e.g. ERDC AFOSR projects -> frontier on carpenter)
+    #   2) profile.default_partition (e.g. "standard")
+    if partition is None and profile is not None:
+        # check the FX rule: project/account number ending in "FX"
+        if (
+            profile.fx_partition is not None
+            and account is not None
+            and str(account).upper().endswith("FX")
+        ):
+            partition = profile.fx_partition
+            logger.info(
+                "account '%s' ends in 'FX' -> routing to %s queue '%s'",
+                account, profile.name, partition,
+            )
+        else:
+            partition = profile.default_partition
+            logger.debug(
+                "using profile default partition '%s' for %s",
+                partition, profile.name,
+            )
+
     # run-script filename
     if scheduler is not Scheduler.UNKNOWN:
         fname = f"run.{scheduler}.{env.hostname}"
