@@ -29,6 +29,7 @@ from ._common import (
     scaffold_case_dir,
     write_launcher_script,
 )
+from ._seed_table import write_seed_table_for_case
 
 # --------------------------------------------------
 # set up logger
@@ -892,6 +893,13 @@ def tracking_setup(
     # read parsing solution
     tp = _read_parsing_solution(fname_parsing)
 
+    # resolve a label for the parsing source file (used in seed-table headers)
+    seed_source_label = (
+        str(fname_parsing)
+        if fname_parsing is not None
+        else "growth_rate_with_nfact_amps.dat"
+    )
+
     # get baseflow file name (default meanflow.bin)
     fname_baseflow = cfg.lst.io.baseflow_input
 
@@ -933,6 +941,16 @@ def tracking_setup(
 
         # store the created directory name for the launcher script
         created_dirs.append(dir_name)
+
+        # generate seed_alpha.dat for this case (no-op when cfg.seed_table.enabled = false)
+        write_seed_table_for_case(
+            case_dir=dir_name,
+            cfg=cfg,
+            tp=tp,
+            idx_betr=idx_betr,
+            betr_loc=float(betr_loc),
+            source_label=seed_source_label,
+        )
 
         # find the initial guess for tracking using the following logic:
         # - smoothe the alpha_i contour

@@ -474,6 +474,89 @@ class LstConfig(_ConfigBase):
 
 
 # --------------------------------------------------
+# SeedTable dataclass
+# --------------------------------------------------
+@dataclasses.dataclass(eq=False)
+# inherit from _ConfigBase to get .to_dict(), .to_toml_dict(), and custom __eq__
+class SeedTable(_ConfigBase):
+    """Tracking initial-guess seed table generation.
+
+    When ``enabled`` is True, ``setup tracking`` runs the ridge tracker
+    from :mod:`lst_tools.process.maxima` on the parsing solution, picks
+    ``n_seeds`` evenly-spaced points along each detected ridge (one ridge
+    per physical mode), and writes a ``seed_alpha.dat`` file into every
+    ``kc_*`` case directory.  The Fortran tracking solver reads that file
+    on startup and uses the nearest seed (within a normalized
+    ``threshold`` distance in (x, f) space) to override its
+    marched/extrapolated initial guess at each station.
+
+    File presence alone activates the seed table on the solver side,
+    so disabling generation here is sufficient to fall back to the
+    standard tracking initial-guess flow.
+    """
+
+    # master switch
+    enabled: bool = False
+
+    # source tecplot ASCII (parsing or refined tracking output); None -> auto
+    source_file: str | None = None
+
+    # number of seeds to emit per detected ridge (one ridge = one mode)
+    n_seeds: int = 12
+
+    # acceptance floor: only stations with alpi >= min_growth contribute seeds
+    min_growth: float = 0.0
+
+    # ridge tracker controls (forwarded to process.maxima._track_ridges)
+    gate_tol: float = 0.05  # relative frequency gate for matching peaks across stations
+    min_valid: int = 5      # minimum stations a ridge must span to be accepted
+
+    # optional clipping windows (empty list -> no clipping)
+    x_range: list[float] = dataclasses.field(default_factory=list)
+    f_range: list[float] = dataclasses.field(default_factory=list)
+
+    # solver-side override radius in normalized (x,f) space; written to file header
+    threshold: float = 0.15
+
+    # output filename (must match SEED_FILE constant in seed_table.f90)
+    output_file: str = "seed_alpha.dat"
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> SeedTable:
+        """Build a ``SeedTable`` from a plain dict."""
+        # default empty list for optional ranges
+        _x_range = d.get("x_range") or []
+        _f_range = d.get("f_range") or []
+
+        # validate ranges
+        x_range = [float(v) for v in _x_range]
+        f_range = [float(v) for v in _f_range]
+
+        # build with explicit per-field coercion
+        _enabled = d.get("enabled")
+        _src = d.get("source_file")
+        _n_seeds = d.get("n_seeds")
+        _min_growth = d.get("min_growth")
+        _gate_tol = d.get("gate_tol")
+        _min_valid = d.get("min_valid")
+        _threshold = d.get("threshold")
+        _output = d.get("output_file")
+
+        return cls(
+            enabled=_coerce_bool(_enabled) if _enabled is not None else False,
+            source_file=_opt_str(_src),
+            n_seeds=int(_n_seeds) if _n_seeds is not None else 12,
+            min_growth=float(_min_growth) if _min_growth is not None else 0.0,
+            gate_tol=float(_gate_tol) if _gate_tol is not None else 0.05,
+            min_valid=int(_min_valid) if _min_valid is not None else 5,
+            x_range=x_range,
+            f_range=f_range,
+            threshold=float(_threshold) if _threshold is not None else 0.15,
+            output_file=str(_output) if _output is not None else "seed_alpha.dat",
+        )
+
+
+# --------------------------------------------------
 # HpcConfig dataclass
 # --------------------------------------------------
 @dataclasses.dataclass(eq=False)
@@ -632,6 +715,7 @@ class Config(_ConfigBase):
     lst: LstConfig = dataclasses.field(default_factory=LstConfig)
     hpc: HpcConfig = dataclasses.field(default_factory=HpcConfig)
     processing: Processing = dataclasses.field(default_factory=Processing)
+    seed_table: SeedTable = dataclasses.field(default_factory=SeedTable)
 
     # validation method to check value constraints and raise ValueError if any violations are found
     def validate(self) -> Config:
@@ -706,6 +790,7 @@ class Config(_ConfigBase):
             lst=LstConfig.from_dict(d.get("lst", {})),
             hpc=HpcConfig.from_dict(d.get("hpc", {})),
             processing=Processing.from_dict(d.get("processing", {})),
+            seed_table=SeedTable.from_dict(d.get("seed_table", {})),
         )
         return cfg.validate()
 
