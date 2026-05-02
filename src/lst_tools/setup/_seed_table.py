@@ -25,6 +25,10 @@ import numpy as np
 # private cross-module reuse: same ridge tracker the post-processing uses
 from lst_tools.process.maxima import Ridge, _track_ridges
 
+# NOTE: smooth_contour_field is imported lazily inside
+# write_seed_table_for_case() to break a circular import:
+# tracking.py imports this module, and smooth_contour_field lives in tracking.py.
+
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------
@@ -276,12 +280,36 @@ def write_seed_table_for_case(
     # broadcast the 1-D freq array along the x-axis
     freq_2d = np.broadcast_to(freq_arr[:, None], alpi_2d.shape).copy()
 
-    # --- run ridge tracker -----------------------------------------------
+    # --- smooth the raw alpi field for ridge detection -------------------
+
+    # The parsing solution often has spurious local maxima (off-mode lobes,
+    # noise, isolated outliers). Running the ridge tracker on the raw field
+    # produces lots of short fragmentary "ridges" that are not real modes.
+    # smooth_contour_field is the same de-spike + min-run + prominence
+    # filter the parsing->tracking initial-guess path already uses.
+    #
+    # IMPORTANT: smoothing is for DETECTION only. Once the ridge tracker
+    # returns ridge indices, _ridge_to_seeds samples alpha_real / alpha_imag
+    # at those (i_x, j_f) locations from the ORIGINAL (unsmoothed) alpr/alpi
+    # arrays so the seed values themselves stay physically faithful.
+
+    # lazy import to break circular dependency with tracking.py
+    from lst_tools.setup.tracking import smooth_contour_field
+
+    alpi_2d_smoothed, _keep_mask = smooth_contour_field(alpi_2d, npasses=5)
+
+    # debug output for devs
+    logger.debug(
+        "seed_table: beta=%.4f smoothed alpi for ridge detection (npasses=5)",
+        betr_loc,
+    )
+
+    # --- run ridge tracker on the smoothed field ------------------------
 
     # use integer (no parabolic refinement) — sub-grid precision is overkill
     # for an initial guess and keeps the index lookup unambiguous
     ridges = _track_ridges(
-        alpi_2d,
+        alpi_2d_smoothed,
         freq_2d,
         gate_tol=st_cfg.gate_tol,
         interpolate=False,
