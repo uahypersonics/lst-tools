@@ -30,15 +30,19 @@ jobs:
           python-version: "3.11"
 
       - name: Install PDF system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libcairo2 \
-            libpango-1.0-0 \
-            libpangocairo-1.0-0 \
-            libgdk-pixbuf-2.0-0 \
-            libffi-dev \
+        # cache apt packages between runs; without this, `apt-get update`
+        # alone takes ~2 min on GitHub-hosted runners because it refreshes
+        # all preconfigured mirrors (azure, microsoft, chrome, google).
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: >-
+            libcairo2
+            libpango-1.0-0
+            libpangocairo-1.0-0
+            libgdk-pixbuf-2.0-0
+            libffi-dev
             shared-mime-info
+          version: 1.0
 
       - name: Install dependencies
         run: |
