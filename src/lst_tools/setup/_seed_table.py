@@ -87,14 +87,27 @@ def _ridge_to_seeds(
         if i_x < 0 or i_x >= nx or j_idx < 0 or j_idx >= nf:
             continue
 
-        # pull dimensional values
+        # pull dimensional values from the parsing solution
         x_val = float(x_arr[i_x])
         f_val = float(freq_arr[j_idx])
-        ar = float(alpr_2d[j_idx, i_x])
-        ai = float(alpi_2d[j_idx, i_x])
+        alpha_real = float(alpr_2d[j_idx, i_x])
 
-        # filter: acceptance floor on growth rate (alpi convention: > 0 = unstable)
-        if ai < min_growth:
+        # NOTE on sign convention:
+        # The parsing tecplot column "-im(alpha)" is bound to tp.field("alpi")
+        # by tecplot_ascii.py. So `alpi_2d` here is the GROWTH RATE
+        # (positive when unstable), NOT the true imaginary part of alpha.
+        # The Fortran tracking solver wants the true alpha_i in its seed
+        # file (no implicit sign flip on read), so we:
+        #   1) keep `growth_rate` for the user-facing min_growth filter
+        #      (most natural: positive = unstable), and
+        #   2) write `alpha_imag = -growth_rate` to disk as the true
+        #      imaginary part of alpha (negative for unstable, matching
+        #      alpha_0 in lst_input.dat and alpha_init internally).
+        growth_rate = float(alpi_2d[j_idx, i_x])
+        alpha_imag = -growth_rate
+
+        # filter: acceptance floor on growth rate (>0 = unstable)
+        if growth_rate < min_growth:
             continue
 
         # filter: optional x clipping window
@@ -105,11 +118,11 @@ def _ridge_to_seeds(
         if f_range and not (f_range[0] <= f_val <= f_range[1]):
             continue
 
-        # accept this ridge point as a candidate seed
+        # accept this ridge point as a candidate seed (true alpha components)
         candidate_x.append(x_val)
         candidate_f.append(f_val)
-        candidate_ar.append(ar)
-        candidate_ai.append(ai)
+        candidate_ar.append(alpha_real)
+        candidate_ai.append(alpha_imag)
 
     # nothing survived the filters
     if len(candidate_x) == 0:
@@ -181,6 +194,9 @@ def _write_seed_file(
     lines.append(f"# threshold     : {threshold:g}  (normalized (x,f) override radius)")
     lines.append("# columns       : x   f   alpha_real   alpha_imag")
     lines.append("# units         : dimensional (matches alpha_0 in lst_input.dat)")
+    lines.append("# convention    : alpha_imag is the TRUE imaginary part of alpha")
+    lines.append("#                 (negative for unstable modes; growth rate = -alpha_imag).")
+    lines.append("#                 The Fortran reader uses this value as-is; no sign flip.")
     lines.append("#")
 
     # number of seeds (first non-comment line)
