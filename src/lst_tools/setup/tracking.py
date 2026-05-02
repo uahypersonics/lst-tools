@@ -501,9 +501,26 @@ def _find_initial_guess(
     cfg: Any,
     debug_path: Path | str | None,
     finit: float | None = None,
+    case_dir: Path | str | None = None,
+    seeds: list[tuple[float, float, float, float]] | None = None,
+    alpi_smoothed: np.ndarray | None = None,
+    keep_mask: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Smooth the alpha_i contour, resolve frequency bounds, and walk
     along the tracking direction to find the most-unstable initial eigenvalue guess.
+
+    When ``debug_path`` is non-None a Tecplot ASCII debug file
+    ``alpi_debug.dat`` is written. If ``case_dir`` is also provided the
+    debug file lands inside that case directory (one debug file per
+    ``kc_*`` case, easier to compare per-beta runs); otherwise it falls
+    back to ``debug_path``. When ``seeds`` is non-empty an additional
+    Tecplot zone is appended to the same file so the seed scatter can be
+    overlaid on the contour in Tecplot/PyVista.
+
+    The ``alpi_smoothed`` and ``keep_mask`` kwargs let the caller supply
+    a precomputed result of ``smooth_contour_field(alpi, npasses=5)`` to
+    avoid recomputing it (e.g. when the seed-table generator already ran
+    the same smoother). When either is None we compute both locally.
     """
 
     # get x locations from parsing solution
@@ -520,12 +537,22 @@ def _find_initial_guess(
     alpi_2d = tp.field("alpi")[idx_betr, :, :]
     alpr_2d = tp.field("alpr")[idx_betr, :, :]
 
-    # smooth the contour field
-    alpi_2d_smoothed, keep_mask = smooth_contour_field(alpi_2d, npasses=5)
+    # smooth the contour field (or accept precomputed result from caller)
+    if alpi_smoothed is None or keep_mask is None:
+        alpi_2d_smoothed, keep_mask = smooth_contour_field(alpi_2d, npasses=5)
+    else:
+        # caller already ran the same 5-pass smoother (e.g. for seed_table
+        # keep_mask) -- reuse to avoid duplicate work
+        alpi_2d_smoothed = alpi_smoothed
 
     # optional debug output
     if debug_path is not None:
-        dbg_dir = Path(debug_path)
+        # prefer per-case directory so multi-beta runs don't clobber each
+        # other and the debug file lives next to seed_alpha.dat / lst_input.dat
+        if case_dir is not None:
+            dbg_dir = Path(case_dir)
+        else:
+            dbg_dir = Path(debug_path)
         dbg_dir.mkdir(parents=True, exist_ok=True)
         nj, ni = alpi_2d.shape
         freq_1d = tp.field("freq")[0, :, 0]
@@ -541,10 +568,14 @@ def _find_initial_guess(
             / uvel_inf
         )
 
+        # write the structured contour zone with all diagnostic fields.
+        # We use write_tecplot_ascii for zone 1 (its formatting is well-tested),
+        # then append a second POINT zone with the seed scatter.
         from lst_tools.data_io.tecplot_ascii import write_tecplot_ascii
 
+        dbg_file = dbg_dir / "alpi_debug.dat"
         write_tecplot_ascii(
-            dbg_dir / "alpi_debug.dat",
+            dbg_file,
             {
                 "x": x_2d,
                 "freq": freq_2d,
@@ -553,9 +584,37 @@ def _find_initial_guess(
                 "cphx": cphx_2d,
                 "keep_mask": km_2d,
             },
-            zone=f"beta={betr_loc:.6f}",
+            zone=f"contour beta={betr_loc:.6f}",
             fmt=".6e",
         )
+
+        # -- append a second zone with the seed_table scatter --
+        # All zones in a Tecplot file share the same VARIABLES list, so we
+        # populate every column for each seed point:
+        #   x          : seed x location
+        #   freq       : seed frequency
+        #   alpi_orig  : -alpha_imag (matches alpi convention = growth rate)
+        #   alpi_smooth: same as alpi_orig (no separate smoothed value at a seed)
+        #   cphx       : 2*pi*f / (alpha_real * U_inf)
+        #   keep_mask  : 1.0 sentinel (not used by ridge tracker for seeds)
+        # Skipped entirely when no seeds were harvested (Tecplot rejects I=0).
+        if seeds:
+            value_fmt = "{:.6e}"
+            with open(dbg_file, "a") as fh:
+                fh.write(f'ZONE T="seeds beta={betr_loc:.6f}", I={len(seeds)}, F=POINT\n')
+                for (xv, fv, ar, ai) in seeds:
+                    # alpi convention in the parsing solution is -im(alpha) = growth rate.
+                    # Seed file stores true im(alpha) (negative for unstable), so flip
+                    # sign here so the scatter Z value matches the contour color scale.
+                    alpi_val = -ai
+                    cphx_val = (2.0 * np.pi * fv) / max(ar, eps) / uvel_inf
+                    fh.write(
+                        " ".join(
+                            value_fmt.format(v)
+                            for v in (xv, fv, alpi_val, alpi_val, cphx_val, 1.0)
+                        )
+                    )
+                    fh.write("\n")
 
     # clamp x_ini to available range
     if x_ini > x[-1]:
@@ -942,14 +1001,33 @@ def tracking_setup(
         # store the created directory name for the launcher script
         created_dirs.append(dir_name)
 
-        # generate seed_alpha.dat for this case (no-op when cfg.seed_table.enabled = false)
-        write_seed_table_for_case(
+        # generate seed_alpha.dat for this case (no-op when cfg.seed_table.enabled = false).
+        # Returned `seeds` list is fed to _find_initial_guess so the debug
+        # Tecplot file shows the harvested points overlaid on the contour.
+        #
+        # Smoothing strategy: _find_initial_guess ALWAYS needs alpi smoothed
+        # (5-pass) to find the most-unstable point and to gate noise; the
+        # seed-table generator wants the SAME mask to reject off-ridge
+        # spurious seeds. We compute it here once and pass it into both
+        # downstream calls -- avoids a duplicate 5-pass smooth per case.
+        # Skipped entirely when seed_table is disabled, in which case
+        # _find_initial_guess will compute it itself on first need.
+        alpi_smoothed_shared: np.ndarray | None = None
+        keep_mask_shared: np.ndarray | None = None
+        if cfg.seed_table.enabled and cfg.seed_table.gate_by_keep_mask:
+            alpi_2d_raw = tp.field("alpi")[idx_betr, :, :]
+            alpi_smoothed_shared, keep_mask_shared = smooth_contour_field(
+                alpi_2d_raw, npasses=5,
+            )
+
+        _, seeds = write_seed_table_for_case(
             case_dir=dir_name,
             cfg=cfg,
             tp=tp,
             idx_betr=idx_betr,
             betr_loc=float(betr_loc),
             source_label=seed_source_label,
+            keep_mask=keep_mask_shared,
         )
 
         # find the initial guess for tracking using the following logic:
@@ -957,7 +1035,12 @@ def tracking_setup(
         # - resolve frequency bounds
         # - walk upstream to find the most unstable point
         # This returns a dictionary with the initial_guess idx_x, idx_f, alpi, alpr, and freq
-        initial_guess = _find_initial_guess(tp, x_ini, idx_betr, cfg, debug_path, finit=finit)
+        initial_guess = _find_initial_guess(
+            tp, x_ini, idx_betr, cfg, debug_path, finit=finit,
+            case_dir=dir_name, seeds=seeds,
+            alpi_smoothed=alpi_smoothed_shared,
+            keep_mask=keep_mask_shared,
+        )
 
         # build the tracking config for this beta, write the input deck, and generate the HPC script for this case
         hpc_cfg = _build_and_write_case(

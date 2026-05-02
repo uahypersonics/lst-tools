@@ -511,6 +511,37 @@ class SeedTable(_ConfigBase):
     gate_tol: float = 0.05  # relative frequency gate for matching peaks across stations
     min_valid: int = 5      # minimum stations a ridge must span to be accepted
 
+    # number of de-spike / prominence smoothing passes applied to the alpi
+    # field BEFORE ridge detection. 0 disables smoothing entirely (default).
+    #
+    # Smoothing helps reject isolated outliers (e.g. off-mode lobes near the
+    # leading edge) but its DP ridge tracker only protects ONE dominant ridge
+    # with a ±3 freq-bin band. Any ridge that bends substantially in
+    # frequency (e.g. the mode-2 banana drifting from high f at low x to low
+    # f at high x) loses its tail because the protected band drifts off the
+    # actual ridge downstream. With even 1 pass, ridges spanning multiple
+    # freq bins per x-step get truncated.
+    #
+    # If you have spurious leading-edge peaks, prefer setting `x_range` over
+    # raising smooth_passes. Use smooth_passes >= 1 only when the parsing
+    # field is genuinely noisy and the ridge of interest stays nearly
+    # constant in frequency across x.
+    smooth_passes: int = 0
+
+    # If True, run a 5-pass smooth_contour_field on alpi to compute a
+    # "keep_mask" (a ±3-bin band around the dominant DP-tracked ridge) and
+    # discard any candidate seed that falls outside this mask.
+    #
+    # This rejects spurious off-ridge peaks (vertical streak artifacts at low
+    # x, isolated outliers, off-mode lobes) without affecting the smoothing
+    # of the field used for ridge DETECTION (controlled by smooth_passes).
+    # Detection runs on the raw or lightly-smoothed field, gating runs on
+    # the heavily-smoothed mask -- best of both worlds.
+    #
+    # Disable only for diagnostic runs where you want to see every candidate
+    # the ridge tracker found.
+    gate_by_keep_mask: bool = True
+
     # optional clipping windows (empty list -> no clipping)
     x_range: list[float] = dataclasses.field(default_factory=list)
     f_range: list[float] = dataclasses.field(default_factory=list)
@@ -539,6 +570,8 @@ class SeedTable(_ConfigBase):
         _min_growth = d.get("min_growth")
         _gate_tol = d.get("gate_tol")
         _min_valid = d.get("min_valid")
+        _smooth_passes = d.get("smooth_passes")
+        _gate_by_keep_mask = d.get("gate_by_keep_mask")
         _threshold = d.get("threshold")
         _output = d.get("output_file")
 
@@ -549,6 +582,9 @@ class SeedTable(_ConfigBase):
             min_growth=float(_min_growth) if _min_growth is not None else 0.0,
             gate_tol=float(_gate_tol) if _gate_tol is not None else 0.05,
             min_valid=int(_min_valid) if _min_valid is not None else 5,
+            smooth_passes=int(_smooth_passes) if _smooth_passes is not None else 0,
+            gate_by_keep_mask=_coerce_bool(_gate_by_keep_mask)
+                if _gate_by_keep_mask is not None else True,
             x_range=x_range,
             f_range=f_range,
             threshold=float(_threshold) if _threshold is not None else 0.15,

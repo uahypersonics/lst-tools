@@ -49,6 +49,7 @@ def _ridge_to_seeds(
     min_growth: float,
     x_range: list[float],
     f_range: list[float],
+    keep_mask: np.ndarray | None = None,
 ) -> list[tuple[float, float, float, float]]:
     """Pick ``n_seeds`` (x, f, alpha_r, alpha_i) tuples from a ridge.
 
@@ -64,6 +65,10 @@ def _ridge_to_seeds(
         min_growth: drop ridge points where alpi < min_growth.
         x_range: optional [x_min, x_max] clipping window (empty -> no clip).
         f_range: optional [f_min, f_max] clipping window (empty -> no clip).
+        keep_mask: optional (nf, nx) boolean mask. When provided, candidate
+            ridge points where ``keep_mask[j_f, i_x]`` is False are dropped.
+            Used to reject spurious off-ridge peaks the ridge tracker latched
+            onto but that the dominant-ridge protection band excluded.
 
     Returns:
         List of (x, freq, alpha_real, alpha_imag) tuples, dimensional values
@@ -120,6 +125,10 @@ def _ridge_to_seeds(
 
         # filter: optional f clipping window
         if f_range and not (f_range[0] <= f_val <= f_range[1]):
+            continue
+
+        # filter: keep_mask gate (drop off-dominant-ridge spurious peaks)
+        if keep_mask is not None and not bool(keep_mask[j_idx, i_x]):
             continue
 
         # accept this ridge point as a candidate seed (true alpha components)
@@ -225,7 +234,8 @@ def write_seed_table_for_case(
     idx_betr: int,
     betr_loc: float,
     source_label: str,
-) -> Path | None:
+    keep_mask: np.ndarray | None = None,
+) -> tuple[Path | None, list[tuple[float, float, float, float]]]:
     """Generate ``seed_alpha.dat`` for a single tracking case directory.
 
     Reads the parsing solution at ``idx_betr``, runs the ridge tracker on
@@ -241,9 +251,22 @@ def write_seed_table_for_case(
         betr_loc: physical beta value for this case (header annotation).
         source_label: short description of the source file (header annotation).
 
+        source_label: short description of the source file (header annotation).
+        keep_mask: optional (nf, nx) boolean mask precomputed by the caller
+            (e.g. via ``smooth_contour_field``) used to gate spurious
+            off-ridge seed candidates. When ``None`` and
+            ``cfg.seed_table.gate_by_keep_mask`` is True, the mask is
+            computed locally; pass it in to avoid the duplicate
+            ``smooth_contour_field`` call when the caller already needs the
+            same mask for other purposes (e.g. ``_find_initial_guess``).
+
     Returns:
-        Path to the written seed file, or ``None`` when generation is
-        disabled in config.
+        Tuple ``(out_path, seeds)``:
+          * ``out_path`` -- path to the written seed file, or ``None`` when
+            generation is disabled in config.
+          * ``seeds`` -- list of ``(x, f, alpha_real, alpha_imag)`` tuples
+            (sorted by x). Empty when generation is disabled or no ridges
+            survived filtering.
     """
 
     # convert to Path object
@@ -254,7 +277,7 @@ def write_seed_table_for_case(
 
     # check master switch
     if not st_cfg.enabled:
-        return None
+        return None, []
 
     # --- read 2-D parsing fields at this beta slice -----------------------
 
@@ -286,30 +309,46 @@ def write_seed_table_for_case(
     # noise, isolated outliers). Running the ridge tracker on the raw field
     # produces lots of short fragmentary "ridges" that are not real modes.
     # smooth_contour_field is the same de-spike + min-run + prominence
-    # filter the parsing->tracking initial-guess path already uses.
+    # filter the parsing->tracking initial-guess path uses.
     #
     # IMPORTANT: smoothing is for DETECTION only. Once the ridge tracker
     # returns ridge indices, _ridge_to_seeds samples alpha_real / alpha_imag
     # at those (i_x, j_f) locations from the ORIGINAL (unsmoothed) alpr/alpi
     # arrays so the seed values themselves stay physically faithful.
+    #
+    # NOTE on smooth_passes: the smoother's DP ridge tracker only protects
+    # ONE dominant ridge with a ±3-bin freq band. With many passes (5+),
+    # any ridge that bends substantially in frequency (e.g. the mode-2
+    # banana that drifts from high f at low x to low f at high x) loses
+    # its tail because the protected band drifts off the actual ridge
+    # downstream. smooth_passes=2 keeps de-spiking strong enough to kill
+    # isolated outliers while preserving the full extent of bending ridges.
+    # Set smooth_passes=0 to skip smoothing entirely.
+    if st_cfg.smooth_passes > 0:
+        # lazy import to break circular dependency with tracking.py
+        from lst_tools.setup.tracking import smooth_contour_field
 
-    # lazy import to break circular dependency with tracking.py
-    from lst_tools.setup.tracking import smooth_contour_field
+        alpi_2d_for_detection, _keep_mask = smooth_contour_field(
+            alpi_2d, npasses=st_cfg.smooth_passes
+        )
+        logger.debug(
+            "seed_table: beta=%.4f smoothed alpi for ridge detection (npasses=%d)",
+            betr_loc, st_cfg.smooth_passes,
+        )
+    else:
+        # no smoothing — run the tracker directly on the raw field
+        alpi_2d_for_detection = alpi_2d
+        logger.debug(
+            "seed_table: beta=%.4f smoothing disabled (smooth_passes=0)",
+            betr_loc,
+        )
 
-    alpi_2d_smoothed, _keep_mask = smooth_contour_field(alpi_2d, npasses=5)
-
-    # debug output for devs
-    logger.debug(
-        "seed_table: beta=%.4f smoothed alpi for ridge detection (npasses=5)",
-        betr_loc,
-    )
-
-    # --- run ridge tracker on the smoothed field ------------------------
+    # --- run ridge tracker on the (possibly smoothed) field --------------
 
     # use integer (no parabolic refinement) — sub-grid precision is overkill
     # for an initial guess and keeps the index lookup unambiguous
     ridges = _track_ridges(
-        alpi_2d_smoothed,
+        alpi_2d_for_detection,
         freq_2d,
         gate_tol=st_cfg.gate_tol,
         interpolate=False,
@@ -319,6 +358,42 @@ def write_seed_table_for_case(
         "seed_table: beta=%.4f -> %d raw ridge(s) detected",
         betr_loc, len(ridges),
     )
+
+    # --- compute (or accept) the keep_mask used to gate spurious seeds --
+
+    # The smooth_contour_field utility runs a 5-pass de-spike + min-run +
+    # prominence filter and tracks the dominant ridge with a ±3-bin band
+    # around it (RIDGE_HALF_WIDTH_BINS). Any (j_f, i_x) outside this band
+    # is set False in keep_mask -- i.e. "this pixel is NOT on the dominant
+    # persistent ridge". We use this independently of smooth_passes:
+    # detection runs on the raw/lightly-smoothed field (preserves bending
+    # ridge tails); gating uses the heavily-smoothed mask (rejects streaks
+    # and off-mode peaks).
+    #
+    # If the caller already computed the same mask (e.g. _find_initial_guess
+    # always smooths alpi to find the max-growth point), it can pass it in
+    # via the keep_mask kwarg to avoid recomputing the 5-pass smooth here.
+    if st_cfg.gate_by_keep_mask and keep_mask is None:
+        # lazy import to break circular dependency with tracking.py
+        from lst_tools.setup.tracking import smooth_contour_field
+
+        _, keep_mask = smooth_contour_field(alpi_2d, npasses=5)
+
+        logger.debug(
+            "seed_table: beta=%.4f computed keep_mask locally (no caller-supplied mask)",
+            betr_loc,
+        )
+    elif not st_cfg.gate_by_keep_mask:
+        # explicit user override: skip gating entirely
+        keep_mask = None
+
+    if keep_mask is not None:
+        n_kept = int(keep_mask.sum())
+        n_total = keep_mask.size
+        logger.debug(
+            "seed_table: beta=%.4f keep_mask covers %d / %d pixels (%.1f%%)",
+            betr_loc, n_kept, n_total, 100.0 * n_kept / n_total,
+        )
 
     # --- filter ridges by min_valid (drop short noise ridges) ------------
 
@@ -343,6 +418,7 @@ def write_seed_table_for_case(
             min_growth=st_cfg.min_growth,
             x_range=st_cfg.x_range,
             f_range=st_cfg.f_range,
+            keep_mask=keep_mask,
         )
         logger.info(
             "seed_table: beta=%.4f ridge %d -> %d seed(s)",
@@ -357,6 +433,15 @@ def write_seed_table_for_case(
             " (Fortran solver will fall back to standard initial guess)",
             betr_loc,
         )
+
+    # --- sort seeds by x for readability ---------------------------------
+
+    # Each ridge contributed its own block of seeds; concatenated in ridge
+    # order they look scrambled. Sorting by x (then frequency as a tie-breaker)
+    # makes the file easier to inspect and produces stable diffs across runs.
+    # The Fortran lookup is order-independent (nearest-neighbor in normalized
+    # (x,f) space) so this is purely cosmetic.
+    all_seeds.sort(key=lambda row: (row[0], row[1]))
 
     # --- write the seed file ---------------------------------------------
 
@@ -374,4 +459,4 @@ def write_seed_table_for_case(
         len(all_seeds), out_path,
     )
 
-    return out_path
+    return out_path, all_seeds
