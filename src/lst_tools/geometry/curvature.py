@@ -73,7 +73,7 @@ def curvature(
         # get keyword arguments for smoothing method (either empty if none provided or as specified in method_params dictionary)
         params = dict(method_params or {})
         # smooth curvature
-        kappa_smoothed = smooth_kappa(x, kappa, method=method, **params)
+        kappa_smoothed = smooth_kappa(x, kappa, method=method, method_params=params)
     else:
         # no smoothing, return raw curvature in kappa_smoothed (used downstream)
         kappa_smoothed = kappa
@@ -249,7 +249,11 @@ def smooth_robust(
 # curvature computation and smoothing dispatch
 # --------------------------------------------------
 def smooth_kappa(
-    x: np.ndarray, kappa: np.ndarray, *, method: str = "spline", **kwargs
+    x: np.ndarray,
+    kappa: np.ndarray,
+    *,
+    method: str = "spline",
+    method_params: dict[str, Any] | None = None,
 ) -> np.ndarray:
     """Dispatch to a chosen smoothing method.
 
@@ -257,19 +261,20 @@ def smooth_kappa(
         x: Coordinate array.
         kappa: Raw curvature array.
         method: One of "spline", "savgol", "gaussian", "robust".
-        **kwargs: Forwarded to the chosen smoother.
+        method_params: Extra parameters forwarded to the chosen smoother.
 
     Returns:
         Smoothed curvature array.
     """
+    params = dict(method_params or {})
     m = (method or "spline").lower()
     if m == "savgol":
-        return smooth_savgol(kappa, **kwargs)
+        return smooth_savgol(kappa, **params)
     elif m == "gaussian":
-        return smooth_gaussian(kappa, **kwargs)
+        return smooth_gaussian(kappa, **params)
     elif m == "robust":
-        return smooth_robust(kappa, **kwargs)
+        return smooth_robust(kappa, **params)
     elif m == "spline":
-        return smooth_spline(x, kappa, **kwargs)
+        return smooth_spline(x, kappa, **params)
     else:
         raise ValueError(f"unknown smoothing method: {method!r}")

@@ -1,4 +1,4 @@
-"""lst-tools visualize — stage-aware wrappers for cfd-viz LST plots."""
+"""lst-tools visualize — stage-aware wrappers for quick LST contour plots."""
 
 
 # --------------------------------------------------
@@ -19,6 +19,23 @@ import typer
 # set up logger
 # --------------------------------------------------
 logger = logging.getLogger(__name__)
+
+
+# --------------------------------------------------
+# default rendering settings for minimal wrappers
+# --------------------------------------------------
+DEFAULT_FIELD = "-im(alpha)"
+DEFAULT_PARSING_PREFIX = "alpi_kc"
+DEFAULT_TRACKING_PREFIX = "alpi_kc"
+DEFAULT_XVAR = "s"
+DEFAULT_YVAR = "freq,freq."
+DEFAULT_KVAR = "beta"
+DEFAULT_ALL_K = True
+DEFAULT_K_INDEX = 1
+DEFAULT_LEVELS_POLICY = "positive-rounded"
+DEFAULT_LEVELS_COUNT = 60
+DEFAULT_CLIP_BELOW = True
+DEFAULT_DPI = 300
 
 
 # --------------------------------------------------
@@ -157,7 +174,7 @@ def _visualize_data(
     dpi: int,
     emit_summary: bool = True,
 ) -> list[Path]:
-    """Dispatch stage visualization to cfd-viz renderer."""
+    """Dispatch stage visualization to the plotting backend."""
 
     # validate input file exists before rendering
     if not input_path.exists():
@@ -172,17 +189,17 @@ def _visualize_data(
         prefix,
     )
 
-    # lazily import cfd-viz renderer only when visualize commands are used
+    # lazily import plotting backend only when visualize commands are used
     try:
         lst_module = importlib.import_module("cfd_viz.lst")
         render_lst_contours = lst_module.render_lst_contours
     except Exception as exc:  # pragma: no cover - tested via CLI behavior
         raise RuntimeError(
-            "cfd-viz is required for visualization wrappers. "
-            "Install it in this environment (for example: pip install cfd-viz)."
+            "visualization support is required for visualize commands. "
+            "Install the visualization dependency in this environment."
         ) from exc
 
-    # call cfd-viz plotting engine
+    # call plotting backend
     files = render_lst_contours(
         path=input_path,
         field=field,
@@ -233,68 +250,24 @@ def cmd_visualize_parsing(
             help="Output directory for rendered parsing plots.",
         ),
     ] = Path("alpi_contours_parsing"),
-    prefix: Annotated[
-        str,
-        typer.Option("--prefix", "-p", help="Output filename prefix."),
-    ] = "alpi_kc",
-    field: Annotated[
-        str,
-        typer.Option("--field", "-f", help="Contour field name."),
-    ] = "-im(alpha)",
-    xvar: Annotated[
-        str,
-        typer.Option("--xvar", help="X-axis variable or aliases."),
-    ] = "s",
-    yvar: Annotated[
-        str,
-        typer.Option("--yvar", help="Y-axis variable or aliases."),
-    ] = "freq,freq.",
-    kvar: Annotated[
-        str,
-        typer.Option("--kvar", help="K-sweep variable or aliases."),
-    ] = "beta",
-    all_k: Annotated[
-        bool,
-        typer.Option("--all-k/--single-k", help="Render all k-planes or one selected plane."),
-    ] = True,
-    k_index: Annotated[
-        int,
-        typer.Option("--k-index", "-k", min=1, help="1-based k index when --single-k is used."),
-    ] = 1,
-    levels_policy: Annotated[
-        str,
-        typer.Option("--levels-policy", help="Contour levels policy."),
-    ] = "positive-rounded",
-    levels_count: Annotated[
-        int,
-        typer.Option("--levels-count", min=2, help="Number of contour levels."),
-    ] = 60,
-    clip_below: Annotated[
-        bool,
-        typer.Option("--clip-below/--no-clip-below", help="Clip values below minimum contour level."),
-    ] = True,
-    dpi: Annotated[
-        int,
-        typer.Option("--dpi", min=72, help="PNG output DPI."),
-    ] = 300,
 ) -> None:
-    """Visualize parsing results using cfd-viz defaults."""
+    """Visualize parsing results using built-in defaults."""
     try:
         _visualize_data(
             stage="parsing",
             input_path=input_path,
             out_dir=out_dir,
-            prefix=prefix,
-            field=field,
-            xvar=xvar,
-            yvar=yvar,
-            kvar=kvar,
-            all_k=all_k,
-            k_index=k_index,
-            levels_policy=levels_policy,
-            levels_count=levels_count,
-            clip_below=clip_below,
-            dpi=dpi,
+            prefix=DEFAULT_PARSING_PREFIX,
+            field=DEFAULT_FIELD,
+            xvar=DEFAULT_XVAR,
+            yvar=DEFAULT_YVAR,
+            kvar=DEFAULT_KVAR,
+            all_k=DEFAULT_ALL_K,
+            k_index=DEFAULT_K_INDEX,
+            levels_policy=DEFAULT_LEVELS_POLICY,
+            levels_count=DEFAULT_LEVELS_COUNT,
+            clip_below=DEFAULT_CLIP_BELOW,
+            dpi=DEFAULT_DPI,
         )
     except Exception as exc:
         typer.echo(f"error: {exc}", err=True)
@@ -321,52 +294,8 @@ def cmd_visualize_tracking(
             help="Output directory for rendered tracking plots.",
         ),
     ] = Path("alpi_contours_tracking"),
-    prefix: Annotated[
-        str,
-        typer.Option("--prefix", "-p", help="Output filename prefix."),
-    ] = "alpi_kc",
-    field: Annotated[
-        str,
-        typer.Option("--field", "-f", help="Contour field name."),
-    ] = "-im(alpha)",
-    xvar: Annotated[
-        str,
-        typer.Option("--xvar", help="X-axis variable or aliases."),
-    ] = "s",
-    yvar: Annotated[
-        str,
-        typer.Option("--yvar", help="Y-axis variable or aliases."),
-    ] = "freq,freq.",
-    kvar: Annotated[
-        str,
-        typer.Option("--kvar", help="K-sweep variable or aliases."),
-    ] = "beta",
-    all_k: Annotated[
-        bool,
-        typer.Option("--all-k/--single-k", help="Render all k-planes or one selected plane."),
-    ] = True,
-    k_index: Annotated[
-        int,
-        typer.Option("--k-index", "-k", min=1, help="1-based k index when --single-k is used."),
-    ] = 1,
-    levels_policy: Annotated[
-        str,
-        typer.Option("--levels-policy", help="Contour levels policy."),
-    ] = "positive-rounded",
-    levels_count: Annotated[
-        int,
-        typer.Option("--levels-count", min=2, help="Number of contour levels."),
-    ] = 60,
-    clip_below: Annotated[
-        bool,
-        typer.Option("--clip-below/--no-clip-below", help="Clip values below minimum contour level."),
-    ] = True,
-    dpi: Annotated[
-        int,
-        typer.Option("--dpi", min=72, help="PNG output DPI."),
-    ] = 300,
 ) -> None:
-    """Visualize tracking results using cfd-viz defaults."""
+    """Visualize tracking results using built-in defaults."""
     try:
         # set default input file used for tracking fallback behavior
         default_tracking_volume = Path("lst_vol.dat")
@@ -377,17 +306,17 @@ def cmd_visualize_tracking(
                 stage="tracking",
                 input_path=input_path,
                 out_dir=out_dir,
-                prefix=prefix,
-                field=field,
-                xvar=xvar,
-                yvar=yvar,
-                kvar=kvar,
-                all_k=all_k,
-                k_index=k_index,
-                levels_policy=levels_policy,
-                levels_count=levels_count,
-                clip_below=clip_below,
-                dpi=dpi,
+                prefix=DEFAULT_TRACKING_PREFIX,
+                field=DEFAULT_FIELD,
+                xvar=DEFAULT_XVAR,
+                yvar=DEFAULT_YVAR,
+                kvar=DEFAULT_KVAR,
+                all_k=DEFAULT_ALL_K,
+                k_index=DEFAULT_K_INDEX,
+                levels_policy=DEFAULT_LEVELS_POLICY,
+                levels_count=DEFAULT_LEVELS_COUNT,
+                clip_below=DEFAULT_CLIP_BELOW,
+                dpi=DEFAULT_DPI,
             )
             return
 
@@ -405,31 +334,31 @@ def cmd_visualize_tracking(
         # compute one shared contour scale across all discovered slices
         level_min, level_max = _compute_shared_bounds(
             input_files=slice_files,
-            field=field,
-            levels_policy=levels_policy,
+            field=DEFAULT_FIELD,
+            levels_policy=DEFAULT_LEVELS_POLICY,
         )
 
         # render one contour per kc directory into a common output folder
         all_outputs: list[Path] = []
         for fpath in slice_files:
-            case_prefix = f"{prefix}_{fpath.parent.name}"
+            case_prefix = f"{DEFAULT_TRACKING_PREFIX}_{fpath.parent.name}"
             outputs = _visualize_data(
                 stage="tracking",
                 input_path=fpath,
                 out_dir=out_dir,
                 prefix=case_prefix,
-                field=field,
-                xvar=xvar,
-                yvar=yvar,
-                kvar=kvar,
+                field=DEFAULT_FIELD,
+                xvar=DEFAULT_XVAR,
+                yvar=DEFAULT_YVAR,
+                kvar=DEFAULT_KVAR,
                 all_k=False,
-                k_index=1,
-                levels_policy=levels_policy,
-                levels_count=levels_count,
+                k_index=DEFAULT_K_INDEX,
+                levels_policy=DEFAULT_LEVELS_POLICY,
+                levels_count=DEFAULT_LEVELS_COUNT,
                 level_min_override=level_min,
                 level_max_override=level_max,
-                clip_below=clip_below,
-                dpi=dpi,
+                clip_below=DEFAULT_CLIP_BELOW,
+                dpi=DEFAULT_DPI,
                 emit_summary=False,
             )
             all_outputs.extend(outputs)

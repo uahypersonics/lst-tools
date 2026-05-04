@@ -60,6 +60,18 @@ plugins:
   - search
   - bibtex:
       bib_file: "docs/refs.bib"
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: false
+            show_signature_annotations: true
+            separate_signature: true
+            merge_init_into_class: true
+            heading_level: 3
 
 # --------------------------------------------------
 # markdown extensions for syntax highlighting, math, etc.
@@ -102,11 +114,43 @@ nav:
   - Installation: installation.md
   - User Guide:
     - user-guide/index.md
-    - Basic Usage: user-guide/basic-usage.md
-    - CLI: user-guide/cli.md
-    - Config Files: user-guide/config-files.md
-  - Theory:
-    - theory/index.md
+    - CLI Usage: user-guide/cli-usage.md
+    - API Usage: user-guide/api-usage.md
+  - Workflow:
+    - workflow/index.md
+    - Initialization and Meanflow Preparation: workflow/initialization-meanflow-preparation.md
+    - Setup Runs: workflow/setup-runs.md
+    - Postprocessing and Cleanup: workflow/postprocessing-cleanup.md
+  - Configuration:
+    - configuration/index.md
+    - Root: configuration/root.md
+    - Flow Conditions: configuration/flow-conditions.md
+    - Geometry: configuration/geometry.md
+    - Meanflow Conversion: configuration/meanflow-conversion.md
+    - Solver: configuration/solver.md
+    - Processing: configuration/processing.md
+    - Seed Table: configuration/seed-table.md
+    - HPC: configuration/hpc.md
+  - CLI Reference:
+    - cli-reference/index.md
+    - init: cli-reference/init.md
+    - lastrac: cli-reference/lastrac.md
+    - setup:
+      - parsing: cli-reference/setup-parsing.md
+      - tracking: cli-reference/setup-tracking.md
+      - spectra: cli-reference/setup-spectra.md
+    - process:
+      - tracking: cli-reference/process-tracking.md
+      - spectra: cli-reference/process-spectra.md
+    - visualize:
+      - parsing: cli-reference/visualize-parsing.md
+      - tracking: cli-reference/visualize-tracking.md
+    - hpc: cli-reference/hpc.md
+    - info: cli-reference/info.md
+    - clean:
+      - parsing: cli-reference/clean-parsing.md
+      - tracking: cli-reference/clean-tracking.md
+      - spectra: cli-reference/clean-spectra.md
   - API Reference:
     - api/index.md
     - Architecture: api/architecture.md

@@ -91,6 +91,18 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+@visualize_app.callback(invoke_without_command=True)
+def _visualize_main(ctx: typer.Context) -> None:
+    """Show visualize help when no subcommand is provided."""
+
+    # check whether a visualize subcommand was selected
+    if ctx.invoked_subcommand is None:
+
+        # write group help instead of returning a missing-command error
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
+
+
 @cli.callback()
 def _main(
     ctx: typer.Context,
@@ -162,7 +174,11 @@ cli.command(name="info")(cmd_info)
 cli.command(name="lastrac")(cmd_lastrac)
 cli.add_typer(process_app, name="process")
 cli.command(name="hpc")(cmd_hpc)
-cli.add_typer(visualize_app, name="visualize")
+cli.add_typer(
+    visualize_app,
+    name="visualize",
+    invoke_without_command=True,
+)
 
 # setup subcommands
 setup_app.command(name="parsing")(cmd_parsing)

@@ -1,7 +1,14 @@
 # User Guide
 
-This section covers how to use `lst_tools` in practice.
+Use this section for practical command-line and Python workflows.
 
-- [Basic Usage](basic-usage.md): End-to-end workflow from config initialization to post-processing
-- [CLI](cli.md): Complete command reference for setup, processing, cleaning, and utilities
-- [Config Files](config-files.md): Structure and key fields of the `lst.cfg` configuration file
+- [CLI Usage](cli-usage.md) - First-run walkthrough for the common command-line path.
+- [API Usage](api-usage.md) - Practical Python workflows built on the public API.
+
+Read [Workflow](../workflow/index.md) first for the overall phase layout. Then use
+[CLI Usage](cli-usage.md) for the practical command-line workflow and
+[API Usage](api-usage.md) for practical Python workflows.
+
+For command lookup, use [CLI Reference](../cli-reference/index.md). For
+configuration-file editing and guidance, use
+[Configuration](../configuration/index.md).

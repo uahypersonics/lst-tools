@@ -9,7 +9,6 @@ Pre- and post-processing toolkit for Linear Stability Theory (LST) analyses of h
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://uahypersonics.github.io/lst-tools/)
 [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-≥3.10-blue.svg)](https://www.python.org/downloads/)
-[![Cite](https://img.shields.io/badge/Cite-this%20repository-blue)](https://github.com/uahypersonics/lst-tools?tab=citations)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 ## Install
@@ -18,30 +17,21 @@ Pre- and post-processing toolkit for Linear Stability Theory (LST) analyses of h
 pip install lst-tools
 ```
 
+See the full installation guide: https://uahypersonics.github.io/lst-tools/installation/
+
 ## Quick Start
 
+Confirm the installation from the terminal:
+
 ```bash
-# create a default config for a cone geometry
-lst-tools init --geometry cone
-
-# prepare an HDF5 meanflow file before using lst-tools
-lst-tools lastrac
-
-# set up and run LST
-lst-tools setup parsing --auto-fill
-
-# set up tracking and spectra
-lst-tools setup tracking --auto-fill
-lst-tools setup spectra
-
-# post-process results
-lst-tools process tracking
-lst-tools process spectra
-
-# visualize parsing/tracking outputs (via cfd-viz wrappers)
-lst-tools visualize parsing
-lst-tools visualize tracking
+lst-tools --version
 ```
+
+From here:
+
+- Workflow: https://uahypersonics.github.io/lst-tools/workflow/
+- CLI Usage: https://uahypersonics.github.io/lst-tools/user-guide/cli-usage/
+- API Usage: https://uahypersonics.github.io/lst-tools/user-guide/api-usage/
 
 Run `lst-tools --help` for a full list of commands.
 

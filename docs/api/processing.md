@@ -13,6 +13,7 @@ tracking_process(config)
 ```
 
 Post-process tracking calculation results (N-factors, growth rates).
+Post-process tracking calculation results.
 
 ::: lst_tools.process.tracking_process
 

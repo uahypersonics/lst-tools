@@ -21,6 +21,13 @@ class TestVisualizeCLI:
         assert "parsing" in result.output
         assert "tracking" in result.output
 
+    def test_visualize_group_no_args_shows_help(self):
+        result = runner.invoke(cli, ["visualize"])
+        assert result.exit_code == 0
+        assert "Visualize LST results." in result.output
+        assert "parsing" in result.output
+        assert "tracking" in result.output
+
     @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
     def test_visualize_parsing_dispatch(self, mock_import_module, tmp_path: Path):
         input_file = tmp_path / "growth_rate_with_nfact_amps.dat"
@@ -51,6 +58,8 @@ class TestVisualizeCLI:
         kwargs = mock_render.call_args.kwargs
         assert kwargs["path"] == input_file
         assert kwargs["out_dir"] == out_dir
+        assert kwargs["field"] == "-im(alpha)"
+        assert kwargs["all_k"] is True
         assert kwargs["show"] is False
 
     @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
@@ -71,9 +80,6 @@ class TestVisualizeCLI:
                 str(input_file),
                 "--out",
                 str(out_dir),
-                "--single-k",
-                "--k-index",
-                "1",
             ],
         )
 
@@ -81,10 +87,11 @@ class TestVisualizeCLI:
         assert "visualization complete (tracking)" in result.output
         mock_render.assert_called_once()
         kwargs = mock_render.call_args.kwargs
-        assert kwargs["all_k"] is False
+        assert kwargs["field"] == "-im(alpha)"
+        assert kwargs["all_k"] is True
         assert kwargs["k_index"] == 1
 
-    @patch("lst_tools.cli.cmd_visualize.importlib.import_module", side_effect=ImportError("cfd-viz missing"))
+    @patch("lst_tools.cli.cmd_visualize.importlib.import_module", side_effect=ImportError("visualization backend missing"))
     def test_visualize_missing_dependency(self, _mock_import_module, tmp_path: Path):
         input_file = tmp_path / "growth_rate_with_nfact_amps.dat"
         input_file.write_text("dummy", encoding="utf-8")
@@ -100,7 +107,7 @@ class TestVisualizeCLI:
         )
 
         assert result.exit_code != 0
-        assert "cfd-viz is required for visualization wrappers" in result.output
+        assert "visualization support is required for visualize commands" in result.output
 
     def test_visualize_input_missing(self):
         result = runner.invoke(

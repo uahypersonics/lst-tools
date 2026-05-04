@@ -1,28 +1,38 @@
 # Data I/O
 
-File readers and writers for various scientific data formats.
+File readers and writers for the formats used by the LST workflow.
 
-## Fortran Binary
+## Fortran Binary (re-exported from `cfd-io`)
 
-### `FortranBinaryReader`
+`lst_tools` re-exports the Fortran binary reader and writer used for solver
+binary files from [`cfd-io`](https://pypi.org/project/cfd-io/):
 
 ```python
-from lst_tools import FortranBinaryReader
+from lst_tools import FortranBinaryReader, FortranBinaryWriter
 
 reader = FortranBinaryReader("meanflow.bin")
-```
-
-::: lst_tools.data_io.FortranBinaryReader
-
-### `FortranBinaryWriter`
-
-```python
-from lst_tools import FortranBinaryWriter
-
 writer = FortranBinaryWriter("output.bin")
 ```
 
-::: lst_tools.data_io.FortranBinaryWriter
+See the `cfd-io` documentation for the full API.
+
+## Meanflow Binary
+
+### `LastracReader`
+
+```python
+from lst_tools.data_io import LastracReader
+```
+
+::: lst_tools.data_io.LastracReader
+
+### `LastracWriter`
+
+```python
+from lst_tools.data_io import LastracWriter
+```
+
+::: lst_tools.data_io.LastracWriter
 
 ## Flow Conditions
 
