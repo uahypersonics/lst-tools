@@ -29,7 +29,11 @@ class TestMergeFlowDefaults:
 
     def test_merge_flow_defaults_with_valid_flow_path(self):
         """Test that it initializes correctly WITH a flow path"""
-        from tests.mocks import MOCK_FLOW_CONDITIONS_DAT
+        # read
+        try:
+            from tests.mocks import MOCK_FLOW_CONDITIONS_DAT
+        except ModuleNotFoundError:
+            from mocks import MOCK_FLOW_CONDITIONS_DAT
 
         result = merge_flow_defaults(DEFAULTS, MOCK_FLOW_CONDITIONS_DAT)
 
