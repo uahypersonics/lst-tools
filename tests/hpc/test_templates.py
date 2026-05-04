@@ -123,6 +123,21 @@ class TestRenderSlurm:
         text = render_slurm(_slurm_job(launcher="aprun"))
         assert "aprun -n" in text
 
+    def test_constraint_and_extra_sbatch_are_rendered(self):
+        text = render_slurm(
+            _slurm_job(
+                account=None,
+                partition=None,
+                constraint="zen4",
+                extra_sbatch=("#SBATCH --mail-type=END",),
+            )
+        )
+
+        assert "#SBATCH --account=" not in text
+        assert "#SBATCH --partition=" not in text
+        assert "#SBATCH --constraint=zen4" in text
+        assert "#SBATCH --mail-type=END" in text
+
 
 # ------------------------------------------------------------------
 # PBS rendering
@@ -169,6 +184,50 @@ class TestRenderPbs:
         assert 'setenv LD_LIBRARY_PATH "$HOME/lib:$LD_LIBRARY_PATH"' in text
         assert "setenv UCX_WARN_UNUSED_ENV_VARS n" in text
         assert "module swap cray-mpich cray-mpich-ucx" in text
+
+    def test_csh_shell_renders_output_env_and_filtered_args(self, monkeypatch):
+        monkeypatch.setenv("SHELL", "/bin/tcsh")
+
+        text = render_pbs(
+            _pbs_job(
+                output="job.out",
+                modules=("cray-mpich",),
+                cpus_per_task=2,
+            ),
+            args=["lst_input.dat", ">old.log"],
+            extra_env={"FOO": "bar"},
+        )
+
+        assert text.startswith("#!/bin/csh")
+        assert "#PBS -o job.out" in text
+        assert "#PBS -l select=2:ncpus=96:mpiprocs=48" in text
+        assert "module load cray-mpich" in text
+        assert 'setenv FOO "bar"' in text
+        assert text.count(">run.log") == 1
+
+    def test_bash_shell_omits_optional_directives_and_exports_env(self, monkeypatch):
+        monkeypatch.setenv("SHELL", "/bin/bash")
+
+        text = render_pbs(
+            _pbs_job(
+                account=None,
+                partition=None,
+                job_name=None,
+                output=None,
+                modules=("openmpi",),
+                workdir=None,
+            ),
+            extra_env={"BAR": "baz"},
+        )
+
+        assert text.startswith("#!/usr/bin/env bash")
+        assert "#PBS -A" not in text
+        assert "#PBS -q" not in text
+        assert "#PBS -N" not in text
+        assert "#PBS -o" not in text
+        assert "cd $PBS_O_WORKDIR" in text
+        assert "module load openmpi" in text
+        assert 'export BAR="baz"' in text
 
 
 # ------------------------------------------------------------------

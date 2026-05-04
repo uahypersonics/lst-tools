@@ -254,6 +254,12 @@ def smooth_kappa(
     *,
     method: str = "spline",
     method_params: dict[str, Any] | None = None,
+    window_frac: float | None = None,
+    polyorder: int | None = None,
+    sigma_frac: float | None = None,
+    s_factor: float | None = None,
+    median_frac: float | None = None,
+    gauss_frac: float | None = None,
 ) -> np.ndarray:
     """Dispatch to a chosen smoothing method.
 
@@ -262,11 +268,34 @@ def smooth_kappa(
         kappa: Raw curvature array.
         method: One of "spline", "savgol", "gaussian", "robust".
         method_params: Extra parameters forwarded to the chosen smoother.
+        window_frac: Optional Savitzky-Golay window fraction.
+        polyorder: Optional Savitzky-Golay polynomial order.
+        sigma_frac: Optional Gaussian sigma fraction.
+        s_factor: Optional spline smoothing factor.
+        median_frac: Optional robust median-filter window fraction.
+        gauss_frac: Optional robust Gaussian smoothing fraction.
 
     Returns:
         Smoothed curvature array.
     """
+    # default empty dicts for optional arguments
     params = dict(method_params or {})
+
+    # build backward-compatible explicit smoothing parameters
+    explicit_params = {
+        "window_frac": window_frac,
+        "polyorder": polyorder,
+        "sigma_frac": sigma_frac,
+        "s_factor": s_factor,
+        "median_frac": median_frac,
+        "gauss_frac": gauss_frac,
+    }
+
+    # keep explicit keyword arguments higher priority than method_params
+    for param_name, param_value in explicit_params.items():
+        if param_value is not None:
+            params[param_name] = param_value
+
     m = (method or "spline").lower()
     if m == "savgol":
         return smooth_savgol(kappa, **params)

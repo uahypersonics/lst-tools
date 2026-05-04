@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import re
 from unittest.mock import patch, MagicMock
 
@@ -28,7 +29,7 @@ class TestMergeFlowDefaults:
 
     def test_merge_flow_defaults_with_valid_flow_path(self):
         """Test that it initializes correctly WITH a flow path"""
-        from mocks import MOCK_FLOW_CONDITIONS_DAT
+        from tests.mocks import MOCK_FLOW_CONDITIONS_DAT
 
         result = merge_flow_defaults(DEFAULTS, MOCK_FLOW_CONDITIONS_DAT)
 
@@ -111,6 +112,58 @@ class TestInitCommand:
         out_file = tmp_path / "lst.cfg"
         result = runner.invoke(cli, ["init", "--out", str(out_file)])
         assert result.exit_code == 1
+
+    @patch("lst_tools.cli.cmd_init.merge_flow_defaults")
+    @patch("lst_tools.cli.cmd_init.write_config")
+    def test_init_flow_path_hdf5_autodetect_and_comment_injection(
+        self,
+        mock_write_config,
+        mock_merge_flow_defaults,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Explicit flow path, single HDF5 auto-detect, and comment injection all apply."""
+        out_file = tmp_path / "lst.cfg"
+        flow_file = tmp_path / "flow_conditions.dat"
+        hdf5_file = tmp_path / "meanflow.hdf5"
+
+        flow_file.write_text("mach = 5.0\n", encoding="utf-8")
+        hdf5_file.write_text("not-really-hdf5", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+
+        mock_merge_flow_defaults.return_value = copy.deepcopy(DEFAULTS)
+
+        def _write_config_side_effect(out, *, overwrite, cfg_data):
+            out.write_text(
+                "[processing.spectra]\n"
+                "alpr_min = \"\"\n"
+                "alpr_max = \"\"\n"
+                "alpi_min = \"\"\n"
+                "alpi_max = \"\"\n",
+                encoding="utf-8",
+            )
+            return out
+
+        mock_write_config.side_effect = _write_config_side_effect
+
+        result = runner.invoke(
+            cli,
+            ["init", "--out", str(out_file), "--flow", str(flow_file)],
+        )
+
+        assert result.exit_code == 0
+        assert out_file.exists()
+
+        merge_args = mock_merge_flow_defaults.call_args.args
+        assert merge_args[1] == flow_file
+
+        write_kwargs = mock_write_config.call_args.kwargs
+        cfg_data = write_kwargs["cfg_data"]
+        assert cfg_data["input_file"] == "meanflow.hdf5"
+
+        config_text = out_file.read_text(encoding="utf-8")
+        assert "# Optional alpha-space gates for spectra post-processing." in config_text
+        assert "# Leave any bound empty to disable it." in config_text
 
 
 class TestInitFormatting:

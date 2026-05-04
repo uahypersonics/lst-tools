@@ -1,9 +1,62 @@
 """Tests for lst_tools.setup._common helpers."""
 
 import stat
+from unittest.mock import patch
+
+import pytest
+
+from lst_tools.setup._common import (
+    resolve_config,
+    scaffold_case_dir,
+    write_launcher_script,
+)
 
 
-from lst_tools.setup._common import scaffold_case_dir, write_launcher_script
+# --------------------------------------------------
+# tests for resolve_config
+# --------------------------------------------------
+class TestResolveConfig:
+    """Test suite for resolve_config function."""
+
+    def test_raises_when_no_config_can_be_found(self):
+        """Auto-detection failure raises FileNotFoundError."""
+        with patch("lst_tools.setup._common.find_config", return_value=None):
+            with pytest.raises(FileNotFoundError, match="no config file found"):
+                resolve_config(None)
+
+    def test_loads_detected_config_and_returns_it(self, tmp_path):
+        """Detected config path is loaded and validated."""
+        cfg_path = tmp_path / "lst.cfg"
+        loaded_cfg = {"case": "demo"}
+
+        with patch("lst_tools.setup._common.find_config", return_value=cfg_path):
+            with patch("lst_tools.setup._common.read_config", return_value=loaded_cfg):
+                with patch(
+                    "lst_tools.setup._common.check_consistency",
+                    return_value=([], ["minor warning"]),
+                ):
+                    with patch(
+                        "lst_tools.setup._common.format_report",
+                        return_value="report text",
+                    ):
+                        resolved_cfg = resolve_config(None)
+
+        assert resolved_cfg == loaded_cfg
+
+    def test_raises_when_consistency_errors_exist(self):
+        """Consistency errors are surfaced as ValueError."""
+        cfg = {"case": "bad"}
+
+        with patch(
+            "lst_tools.setup._common.check_consistency",
+            return_value=(["missing section"], []),
+        ):
+            with patch(
+                "lst_tools.setup._common.format_report",
+                return_value="error report",
+            ):
+                with pytest.raises(ValueError, match="found 1 consistency errors"):
+                    resolve_config(cfg)
 
 
 # --------------------------------------------------
@@ -120,6 +173,18 @@ class TestWriteLauncherScript:
 
         content = out.read_text()
         assert "sbatch run.slurm" in content
+
+    def test_hpc_submit_uses_wildcard_when_run_script_name_missing(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        """With submit_cmd only, script falls back to run.*.* glob."""
+        monkeypatch.chdir(tmp_path)
+        out = write_launcher_script(["case_1"], submit_cmd="qsub")
+
+        content = out.read_text()
+        assert "qsub run.*.*" in content
 
     def test_executable_permission(self, tmp_path, monkeypatch):
         """Output script has executable permission."""

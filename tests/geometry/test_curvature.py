@@ -1,7 +1,9 @@
+import builtins
 import numpy as np
 import pytest
 from pathlib import Path
 import tempfile
+from unittest.mock import patch
 
 # Import the functions to test
 from lst_tools.geometry.curvature import (
@@ -129,6 +131,18 @@ class TestCurvatureFunction:
 class TestSmoothingFunctions:
     """Test the smoothing helper functions"""
 
+    @staticmethod
+    def _import_with_blocked_modules(blocked: set[str]):
+        """Build an import hook that forces ImportError for selected modules."""
+        original_import = builtins.__import__
+
+        def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name in blocked:
+                raise ImportError(f"blocked import: {name}")
+            return original_import(name, globals, locals, fromlist, level)
+
+        return _fake_import
+
     def test_smooth_savgol_basic(self):
         """Test Savitzky-Golay smoothing with basic input"""
         # Create test data with clear high frequency noise
@@ -162,6 +176,19 @@ class TestSmoothingFunctions:
         smoothed = smooth_savgol(kappa)
         assert len(smoothed) == 3
 
+    def test_smooth_savgol_importerror_fallback(self):
+        """Savitzky-Golay falls back to a moving average when SciPy is absent."""
+        kappa = np.array([0.0, 1.0, 0.0, 1.0, 0.0], dtype=float)
+
+        with patch(
+            "builtins.__import__",
+            side_effect=self._import_with_blocked_modules({"scipy.signal"}),
+        ):
+            smoothed = smooth_savgol(kappa, window_frac=0.6)
+
+        expected = np.array([1 / 3, 1 / 3, 2 / 3, 1 / 3, 1 / 3])
+        np.testing.assert_allclose(smoothed, expected)
+
     def test_smooth_gaussian_basic(self):
         """Test Gaussian smoothing with basic input"""
         # Create test data
@@ -182,6 +209,19 @@ class TestSmoothingFunctions:
         kappa = np.array([])
         smoothed = smooth_gaussian(kappa)
         assert len(smoothed) == 0
+
+    def test_smooth_gaussian_importerror_fallback(self):
+        """Gaussian smoothing falls back to a moving average when SciPy is absent."""
+        kappa = np.array([0.0, 0.0, 3.0, 0.0, 0.0], dtype=float)
+
+        with patch(
+            "builtins.__import__",
+            side_effect=self._import_with_blocked_modules({"scipy.ndimage"}),
+        ):
+            smoothed = smooth_gaussian(kappa, sigma_frac=0.2)
+
+        expected = np.full_like(kappa, 0.6)
+        np.testing.assert_allclose(smoothed, expected)
 
     def test_smooth_spline_basic(self):
         """Test spline smoothing with basic input"""
@@ -205,6 +245,41 @@ class TestSmoothingFunctions:
         kappa = np.array([])
         smoothed = smooth_spline(x, kappa)
         assert len(smoothed) == 0
+
+    def test_smooth_spline_single_point(self):
+        """Single-point spline smoothing returns a single-point result."""
+        x = np.array([0.0])
+        kappa = np.array([1.5])
+
+        smoothed = smooth_spline(x, kappa)
+
+        assert smoothed.shape == (1,)
+        np.testing.assert_allclose(smoothed, np.array([1.5]))
+
+    def test_smooth_spline_exception_fallback(self):
+        """Spline smoothing falls back to moving average on spline fit errors."""
+        x = np.linspace(0.0, 1.0, 5)
+        kappa = np.array([0.0, 2.0, 0.0, 2.0, 0.0], dtype=float)
+
+        with patch("scipy.interpolate.UnivariateSpline", side_effect=ValueError("boom")):
+            smoothed = smooth_spline(x, kappa)
+
+        expected = np.array([2 / 3, 2 / 3, 4 / 3, 2 / 3, 2 / 3])
+        np.testing.assert_allclose(smoothed, expected)
+
+    def test_smooth_spline_importerror_fallback(self):
+        """Spline smoothing falls back to moving average when SciPy is absent."""
+        x = np.linspace(0.0, 1.0, 5)
+        kappa = np.array([0.0, 2.0, 0.0, 2.0, 0.0], dtype=float)
+
+        with patch(
+            "builtins.__import__",
+            side_effect=self._import_with_blocked_modules({"scipy.interpolate"}),
+        ):
+            smoothed = smooth_spline(x, kappa)
+
+        expected = np.array([2 / 3, 2 / 3, 4 / 3, 2 / 3, 2 / 3])
+        np.testing.assert_allclose(smoothed, expected)
 
     def test_smooth_robust_basic(self):
         """Test robust smoothing with basic input"""
@@ -231,6 +306,19 @@ class TestSmoothingFunctions:
         kappa = np.array([])
         smoothed = smooth_robust(kappa)
         assert len(smoothed) == 0
+
+    def test_smooth_robust_importerror_fallback(self):
+        """Robust smoothing uses the manual median path when SciPy is absent."""
+        kappa = np.array([0.0, 10.0, 0.0, -10.0, 0.0], dtype=float)
+
+        with patch(
+            "builtins.__import__",
+            side_effect=self._import_with_blocked_modules({"scipy.signal"}),
+        ):
+            smoothed = smooth_robust(kappa, median_frac=0.6, gauss_frac=0.2)
+
+        expected = np.zeros_like(kappa)
+        np.testing.assert_allclose(smoothed, expected)
 
 
 class TestSmoothKappaDispatcher:

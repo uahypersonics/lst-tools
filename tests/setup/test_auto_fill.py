@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -11,7 +12,7 @@ import numpy as np
 import pytest
 
 from lst_tools.config.schema import Config
-from lst_tools.setup.parsing import auto_fill_parsing, parsing_setup
+from lst_tools.setup.parsing import auto_fill_parsing, estimate_freq, parsing_setup
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +99,52 @@ MOCK_SAMPLES_CROSSFLOW = {
 
 
 # ---------------------------------------------------------------------------
+# Tests: estimate_freq
+# ---------------------------------------------------------------------------
+
+
+class TestEstimateFreq:
+    """Unit tests for estimate_freq helper branches."""
+
+    def test_returns_fallback_when_all_profiles_are_unusable(self, caplog):
+        samples = {
+            "eta": [np.array([0.0, 0.001]), np.array([0.0, 0.001, 0.002])],
+            "uvel": [np.array([0.0, 1.0]), np.array([0.0, 0.0, 0.0])],
+            "vvel": [np.zeros(2), np.zeros(3)],
+            "wvel": [np.zeros(2), np.zeros(3)],
+            "temp": [np.ones(2), np.ones(3)],
+        }
+
+        with caplog.at_level(logging.WARNING, logger="lst_tools"):
+            f_max = estimate_freq(samples, mach=6.0)
+
+        assert f_max == 100000
+        assert "could not compute BL thickness" in caplog.text
+
+    def test_uses_velocity_fallback_and_skips_zero_edge_location(self, caplog):
+        eta = np.array([0.0, 0.001, 0.002], dtype=float)
+        uvel = np.ones(3, dtype=float)
+        mach = 6.0
+        gamma = 1.4
+        gm1 = gamma - 1.0
+        temp = (1.0 - 0.5 * uvel**2) * mach**2 * gm1
+
+        samples = {
+            "eta": [eta],
+            "uvel": [uvel],
+            "vvel": [np.zeros(3)],
+            "wvel": [np.zeros(3)],
+            "temp": [temp],
+        }
+
+        with caplog.at_level(logging.WARNING, logger="lst_tools"):
+            f_max = estimate_freq(samples, mach=mach, gamma=gamma)
+
+        assert f_max == 100000
+        assert "could not compute BL thickness" in caplog.text
+
+
+# ---------------------------------------------------------------------------
 # Tests: auto_fill_parsing
 # ---------------------------------------------------------------------------
 
@@ -178,6 +225,25 @@ class TestAutoFillParsing:
         assert cfg.lst.params.x_s == 0.3  # unchanged
         assert cfg.lst.params.x_e == pytest.approx(STATIONS_50[-1])  # filled
         assert cfg.lst.params.i_step == 2  # unchanged
+
+    @patch("lst_tools.setup.parsing.read_baseflow_profiles", return_value=MOCK_SAMPLES)
+    @patch("lst_tools.setup.parsing.read_baseflow_stations", return_value=STATIONS_50)
+    def test_fills_i_step_when_x_e_is_already_set(self, mock_read, mock_samples, tmp_path):
+        """Keep x_e when provided and still derive i_step from the station count."""
+        cfg = _make_config(
+            x_s=0.3,
+            x_e=1.2,
+            i_step=None,
+            baseflow_input=str(tmp_path / "meanflow.bin"),
+        )
+        (tmp_path / "meanflow.bin").write_bytes(b"fake")
+
+        changed = auto_fill_parsing(cfg)
+
+        assert changed is True
+        assert cfg.lst.params.x_s == 0.3
+        assert cfg.lst.params.x_e == 1.2
+        assert cfg.lst.params.i_step == 1
 
     def test_returns_false_when_meanflow_missing(self, tmp_path):
         """Space-sweep fields can't be derived, but freq/beta are still filled."""
@@ -385,3 +451,54 @@ class TestAutoFillParsing:
         assert cfg.lst.params.beta_s == 0.0
         assert cfg.lst.params.beta_e == 100.0
         assert cfg.lst.params.d_beta == 10.0
+
+    @patch("lst_tools.setup.parsing.script_build")
+    @patch("lst_tools.setup.parsing.auto_fill_parsing")
+    @patch("lst_tools.setup.parsing.hpc_configure")
+    @patch("lst_tools.setup.parsing.generate_lst_input_deck")
+    @patch("lst_tools.setup.parsing.resolve_config")
+    def test_parsing_setup_auto_fill_empty_out_dir_and_known_scheduler(
+        self,
+        mock_resolve,
+        mock_generate,
+        mock_hpc,
+        mock_auto_fill,
+        mock_script_build,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Known schedulers should emit a run script and honor auto-fill wiring."""
+        cfg = _make_config(baseflow_input=str(tmp_path / "meanflow.bin"))
+        cfg.hpc.extra_env = {"OMP_NUM_THREADS": "1"}
+        cfg.lst_exe = "solver.x"
+
+        mock_resolve.return_value = cfg
+        mock_generate.return_value = tmp_path / "custom_input.dat"
+        mock_hpc.return_value = SimpleNamespace(scheduler="slurm")
+        mock_script_build.return_value = tmp_path / "run.slurm"
+
+        monkeypatch.chdir(tmp_path)
+
+        written = parsing_setup(
+            cfg=cfg,
+            out_dir="",
+            out_name="custom_input.dat",
+            auto_fill=True,
+            force=True,
+            cfg_path=tmp_path / "lst.cfg",
+        )
+
+        assert written == tmp_path / "custom_input.dat"
+        mock_auto_fill.assert_called_once_with(
+            cfg,
+            force=True,
+            cfg_path=tmp_path / "lst.cfg",
+        )
+        mock_generate.assert_called_once_with(out_path=Path("custom_input.dat"), cfg=cfg)
+        mock_script_build.assert_called_once_with(
+            mock_hpc.return_value,
+            Path("."),
+            lst_exe="solver.x",
+            args=["custom_input.dat", ">run.log"],
+            extra_env=cfg.hpc.extra_env,
+        )

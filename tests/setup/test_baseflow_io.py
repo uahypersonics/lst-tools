@@ -131,6 +131,24 @@ class TestReadBaseflowProfiles:
         assert len(result["eta"]) == n_samples
         assert len(result["uvel"]) == n_samples
 
+    def test_subsamples_with_x_spacing(self, tmp_path):
+        """x-spacing mode uses the two-pass coordinate-based sampling path."""
+        n = 21
+        n_samples = 6
+        binfile = tmp_path / "meanflow.bin"
+        x_expected = _write_meanflow(binfile, n_stations=n, n_eta=4)
+
+        result = read_baseflow_profiles(
+            binfile,
+            n_samples=n_samples,
+            spacing="x",
+        )
+
+        assert len(result["x"]) == n_samples
+        np.testing.assert_allclose(result["x"][0], x_expected[0])
+        np.testing.assert_allclose(result["x"][-1], x_expected[-1])
+        assert np.all(np.diff(result["x"]) > 0.0)
+
     def test_profile_shapes(self, tmp_path):
         """Each profile vector has the correct wall-normal dimension."""
         n_eta = 8
