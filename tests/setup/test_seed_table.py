@@ -214,6 +214,9 @@ class TestWriteSeedTableForCase:
         mock_smooth_contour_field,
         tmp_path: Path,
     ):
+        # smooth_passes=2 means smooth_contour_field is called ONCE for detection.
+        # The keep_mask for gating is now built from the union of detected ridge
+        # bands (ridge-union approach), not from a second smooth_contour_field call.
         cfg = _build_cfg(
             min_valid=1,
             smooth_passes=2,
@@ -222,12 +225,13 @@ class TestWriteSeedTableForCase:
         )
         tp = _build_tp()
         detection_mask = np.ones((3, 4), dtype=bool)
-        gate_mask = np.zeros((3, 4), dtype=bool)
-        gate_mask[1, 0] = True
-        mock_smooth_contour_field.side_effect = [
-            (tp.field("alpi")[0, :, :], detection_mask),
-            (tp.field("alpi")[0, :, :], gate_mask),
-        ]
+        mock_smooth_contour_field.return_value = (
+            tp.field("alpi")[0, :, :],
+            detection_mask,
+        )
+        # Ridge has two points: (i_x=0, j_f=1) and (i_x=2, j_f=1).
+        # The ridge-union keep_mask covers ±3 freq-bins around j=1 at those x
+        # columns (all 3 freq rows), so both candidates pass gating.
         mock_track_ridges.return_value = [Ridge(indices=[(0, 1), (2, 1)])]
 
         out_path, seeds = seed_table_mod.write_seed_table_for_case(
@@ -240,8 +244,10 @@ class TestWriteSeedTableForCase:
         )
 
         assert out_path == tmp_path / "seed_alpha.dat"
-        assert seeds == [(0.0, 200.0, 20.0, -0.5)]
-        assert mock_smooth_contour_field.call_count == 2
+        # both ridge points survive the ridge-union gate
+        assert seeds == [(0.0, 200.0, 20.0, -0.5), (2.0, 200.0, 22.0, -0.7)]
+        # smooth_contour_field called once (detection only; mask from ridges)
+        assert mock_smooth_contour_field.call_count == 1
 
     @patch("lst_tools.setup._seed_table._track_ridges")
     def test_writes_empty_file_when_no_seeds_survive(self, mock_track_ridges, tmp_path: Path):

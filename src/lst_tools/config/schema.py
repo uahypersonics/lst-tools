@@ -508,35 +508,37 @@ class SeedTable(_ConfigBase):
     min_growth: float = 10.0
 
     # ridge tracker controls (forwarded to process.maxima._track_ridges)
-    gate_tol: float = 0.05  # relative frequency gate for matching peaks across stations
+    gate_tol: float = 0.10  # relative frequency gate for matching peaks across stations
     min_valid: int = 5      # minimum stations a ridge must span to be accepted
 
     # number of de-spike / prominence smoothing passes applied to the alpi
     # field BEFORE ridge detection. 0 disables smoothing entirely (default).
     #
     # Smoothing helps reject isolated outliers (e.g. off-mode lobes near the
-    # leading edge) but its DP ridge tracker only protects ONE dominant ridge
-    # with a ±3 freq-bin band. Any ridge that bends substantially in
-    # frequency (e.g. the mode-2 banana drifting from high f at low x to low
-    # f at high x) loses its tail because the protected band drifts off the
-    # actual ridge downstream. With even 1 pass, ridges spanning multiple
-    # freq bins per x-step get truncated.
+    # leading edge) that would otherwise fragment the banana ridge into many
+    # short pieces. With smooth_passes=0, the raw noisy field can cause the
+    # ridge tracker to split a single mode into 20+ fragments, each shorter
+    # than min_valid, leaving gaps in the seed coverage.
     #
-    # If you have spurious leading-edge peaks, prefer setting `x_range` over
-    # raising smooth_passes. Use smooth_passes >= 1 only when the parsing
-    # field is genuinely noisy and the ridge of interest stays nearly
-    # constant in frequency across x.
+    # The keep_mask used for seed gating is now built from the union of all
+    # detected ridge bands (slope-agnostic, not DP-based), so it remains
+    # correct regardless of smooth_passes. smooth_passes only affects the
+    # DETECTION quality — whether the banana appears as 1 or 20 fragments.
+    #
+    # Recommended: smooth_passes=2 for steep bending ridges (mode-2 banana).
+    # Use smooth_passes=0 only when you want to see every raw ridge fragment
+    # or the field is already clean.
     smooth_passes: int = 0
 
-    # If True, run a 5-pass smooth_contour_field on alpi to compute a
-    # "keep_mask" (a ±3-bin band around the dominant DP-tracked ridge) and
-    # discard any candidate seed that falls outside this mask.
+    # If True, build a keep_mask from the union of all detected ridge bands
+    # and discard any candidate seed that falls outside this mask.
     #
-    # This rejects spurious off-ridge peaks (vertical streak artifacts at low
-    # x, isolated outliers, off-mode lobes) without affecting the smoothing
-    # of the field used for ridge DETECTION (controlled by smooth_passes).
-    # Detection runs on the raw or lightly-smoothed field, gating runs on
-    # the heavily-smoothed mask -- best of both worlds.
+    # The mask covers ±3 freq-bins around every point of every ridge that
+    # survived the min_valid filter. This rejects off-ridge outliers and
+    # noise peaks the ridge tracker happened to latch onto, without
+    # constraining valid seeds anywhere along the detected ridge path.
+    # Unlike the old DP-based mask, this approach is slope-agnostic and
+    # correctly covers steep banana ridges all the way to their tail.
     #
     # Disable only for diagnostic runs where you want to see every candidate
     # the ridge tracker found.
@@ -580,7 +582,7 @@ class SeedTable(_ConfigBase):
             source_file=_opt_str(_src),
             n_seeds=int(_n_seeds) if _n_seeds is not None else 12,
             min_growth=float(_min_growth) if _min_growth is not None else 10.0,
-            gate_tol=float(_gate_tol) if _gate_tol is not None else 0.05,
+            gate_tol=float(_gate_tol) if _gate_tol is not None else 0.10,
             min_valid=int(_min_valid) if _min_valid is not None else 5,
             smooth_passes=int(_smooth_passes) if _smooth_passes is not None else 0,
             gate_by_keep_mask=_coerce_bool(_gate_by_keep_mask)

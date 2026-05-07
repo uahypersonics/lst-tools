@@ -289,7 +289,10 @@ def smooth_contour_field(
 
     # tuneable parameters for ridge protection
     RIDGE_DP_LAM = 0.6    # smoothness penalty (larger => smoother path)
-    RIDGE_DP_MAX_JUMP = 6  # max frequency-index change per x-step
+    RIDGE_DP_MAX_JUMP = 20  # max frequency-index change per x-step
+    # NOTE: steep mode-2 banana ridges can shift ~9 freq-bins per x-station.
+    # A limit of 20 gives comfortable headroom while the smoothness penalty
+    # (RIDGE_DP_LAM) still prevents erratic jumps when signal is available.
     RIDGE_HALF_WIDTH_BINS = 3  # protect ± this many freq bins around the path
 
     # track ridge on the ORIGINAL field (before any smoothing passes)
@@ -1007,19 +1010,19 @@ def tracking_setup(
         # generate seed_alpha.dat for this case (no-op when cfg.seed_table.enabled = false).
         # Returned `seeds` list is fed to _find_initial_guess so the debug
         # Tecplot file shows the harvested points overlaid on the contour.
-        #
         # Smoothing strategy: _find_initial_guess ALWAYS needs alpi smoothed
         # (5-pass) to find the most-unstable point and to gate noise; the
-        # seed-table generator wants the SAME mask to reject off-ridge
-        # spurious seeds. We compute it here once and pass it into both
-        # downstream calls -- avoids a duplicate 5-pass smooth per case.
+        # seed-table generator builds its own ridge-union keep_mask internally
+        # from the ridges it detects, so it no longer needs the DP-based mask.
+        # We still pre-compute the smoothed field here and pass it to
+        # _find_initial_guess to avoid a redundant 5-pass smooth when the
+        # seed_table and initial-guess code both run for the same case.
         # Skipped entirely when seed_table is disabled, in which case
         # _find_initial_guess will compute it itself on first need.
         alpi_smoothed_shared: np.ndarray | None = None
-        keep_mask_shared: np.ndarray | None = None
-        if cfg.seed_table.enabled and cfg.seed_table.gate_by_keep_mask:
+        if cfg.seed_table.enabled:
             alpi_2d_raw = tp.field("alpi")[idx_betr, :, :]
-            alpi_smoothed_shared, keep_mask_shared = smooth_contour_field(
+            alpi_smoothed_shared, _ = smooth_contour_field(
                 alpi_2d_raw, npasses=5,
             )
 
@@ -1030,7 +1033,7 @@ def tracking_setup(
             idx_betr=idx_betr,
             betr_loc=float(betr_loc),
             source_label=seed_source_label,
-            keep_mask=keep_mask_shared,
+            keep_mask=None,
         )
 
         # find the initial guess for tracking using the following logic:
@@ -1042,7 +1045,7 @@ def tracking_setup(
             tp, x_ini, idx_betr, cfg, debug_path, finit=finit,
             case_dir=dir_name, seeds=seeds,
             alpi_smoothed=alpi_smoothed_shared,
-            keep_mask=keep_mask_shared,
+            keep_mask=None,
         )
 
         # build the tracking config for this beta, write the input deck, and generate the HPC script for this case

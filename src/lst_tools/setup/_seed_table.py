@@ -36,6 +36,34 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------
+# helper: build a keep_mask from the union of all ridge bands
+# --------------------------------------------------
+def _keep_mask_from_ridge_list(
+    ridges: list[Ridge],
+    n_freq: int,
+    n_x: int,
+    half_width: int = 3,
+) -> np.ndarray:
+    """Return a (n_freq, n_x) boolean mask covering ±half_width freq-bins around
+    every point of every ridge in *ridges*.
+
+    Unlike the DP-based mask used by ``smooth_contour_field``, this mask is
+    slope-agnostic: it follows each ridge wherever it goes, no matter how steeply
+    it bends in the (x, freq) plane.  All ridges contribute equally so the mask
+    covers the full extent of every physical mode detected by ``_track_ridges``.
+    """
+    # start with all-False; paint True around each ridge point
+    keep = np.zeros((n_freq, n_x), dtype=bool)
+    for ridge in ridges:
+        for i_x, j_f in ridge.indices:
+            j0 = int(round(float(j_f)))
+            jL = max(0, j0 - half_width)
+            jR = min(n_freq, j0 + half_width + 1)
+            keep[jL:jR, i_x] = True
+    return keep
+
+
+# --------------------------------------------------
 # helper: filter and downsample one ridge into seed (x, f, alpha) tuples
 # --------------------------------------------------
 def _ridge_to_seeds(
@@ -359,42 +387,6 @@ def write_seed_table_for_case(
         betr_loc, len(ridges),
     )
 
-    # --- compute (or accept) the keep_mask used to gate spurious seeds --
-
-    # The smooth_contour_field utility runs a 5-pass de-spike + min-run +
-    # prominence filter and tracks the dominant ridge with a ±3-bin band
-    # around it (RIDGE_HALF_WIDTH_BINS). Any (j_f, i_x) outside this band
-    # is set False in keep_mask -- i.e. "this pixel is NOT on the dominant
-    # persistent ridge". We use this independently of smooth_passes:
-    # detection runs on the raw/lightly-smoothed field (preserves bending
-    # ridge tails); gating uses the heavily-smoothed mask (rejects streaks
-    # and off-mode peaks).
-    #
-    # If the caller already computed the same mask (e.g. _find_initial_guess
-    # always smooths alpi to find the max-growth point), it can pass it in
-    # via the keep_mask kwarg to avoid recomputing the 5-pass smooth here.
-    if st_cfg.gate_by_keep_mask and keep_mask is None:
-        # lazy import to break circular dependency with tracking.py
-        from lst_tools.setup.tracking import smooth_contour_field
-
-        _, keep_mask = smooth_contour_field(alpi_2d, npasses=5)
-
-        logger.debug(
-            "seed_table: beta=%.4f computed keep_mask locally (no caller-supplied mask)",
-            betr_loc,
-        )
-    elif not st_cfg.gate_by_keep_mask:
-        # explicit user override: skip gating entirely
-        keep_mask = None
-
-    if keep_mask is not None:
-        n_kept = int(keep_mask.sum())
-        n_total = keep_mask.size
-        logger.debug(
-            "seed_table: beta=%.4f keep_mask covers %d / %d pixels (%.1f%%)",
-            betr_loc, n_kept, n_total, 100.0 * n_kept / n_total,
-        )
-
     # --- filter ridges by min_valid (drop short noise ridges) ------------
 
     long_ridges = [r for r in ridges if len(r.indices) >= st_cfg.min_valid]
@@ -403,6 +395,37 @@ def write_seed_table_for_case(
         "seed_table: beta=%.4f -> %d ridge(s) after min_valid=%d filter",
         betr_loc, len(long_ridges), st_cfg.min_valid,
     )
+
+    # --- compute the keep_mask used to gate spurious seed candidates -----
+
+    # We build the mask from the UNION of bands around all long_ridges rather
+    # than from smooth_contour_field's DP tracker. The DP tracker uses a fixed
+    # max-jump limit that cannot follow steeply-sloped ridges (e.g. the mode-2
+    # banana that shifts ~9 freq-bins per x-station), causing the mask to stall
+    # horizontally and cut off the ridge tail. The ridge-union approach is
+    # slope-agnostic: every detected ridge point contributes ±HALF_WIDTH bins,
+    # so the mask always covers the full banana extent regardless of slope.
+    #
+    # The caller-supplied `keep_mask` kwarg (e.g. from smooth_contour_field used
+    # by _find_initial_guess) is intentionally NOT used here -- it relies on the
+    # DP tracker and has the same slope limitation.
+    KEEP_MASK_HALF_WIDTH = 3  # ± this many freq-bins around each ridge point
+
+    if st_cfg.gate_by_keep_mask:
+        keep_mask = _keep_mask_from_ridge_list(
+            long_ridges,
+            n_freq=freq_arr.size,
+            n_x=x_arr.size,
+            half_width=KEEP_MASK_HALF_WIDTH,
+        )
+        logger.debug(
+            "seed_table: beta=%.4f ridge-union keep_mask covers %d / %d pixels (%.1f%%)",
+            betr_loc, int(keep_mask.sum()), keep_mask.size,
+            100.0 * keep_mask.sum() / keep_mask.size,
+        )
+    else:
+        # explicit user override: skip gating entirely
+        keep_mask = None
 
     # --- harvest seeds from each surviving ridge -------------------------
 
