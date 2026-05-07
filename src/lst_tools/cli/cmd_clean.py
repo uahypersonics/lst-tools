@@ -115,10 +115,6 @@ def cmd_clean_parsing(
     # collect targets: input deck + HPC run scripts + solver artifacts
     targets: list[Path] = []
 
-    input_deck = directory / name
-    if input_deck.exists():
-        targets.append(input_deck)
-
     # solver output artifacts
     targets.extend(_collect_targets(directory, _SOLVER_ARTIFACTS))
 
