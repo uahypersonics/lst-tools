@@ -552,16 +552,6 @@ class SeedTable(_ConfigBase):
     # output filename (must match SEED_FILE constant in seed_table.f90)
     output_file: str = "seed_alpha.dat"
 
-    def to_dict(self) -> dict[str, Any]:
-        """Return a plain nested dict, omitting advanced internal fields."""
-        # build the full dict then drop the hidden keys
-        # smooth_passes and gate_by_keep_mask are advanced internal knobs with
-        # sensible defaults; excluded here so they don't clutter `lst-tools init`
-        # output, but still readable from lst.cfg via from_dict().
-        _hidden = frozenset({"smooth_passes", "gate_by_keep_mask"})
-        full = dataclasses.asdict(self)  # type: ignore[arg-type]
-        return {k: v for k, v in full.items() if k not in _hidden}
-
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> SeedTable:
         """Build a ``SeedTable`` from a plain dict."""
