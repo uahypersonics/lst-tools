@@ -139,6 +139,9 @@ _register(
         login_aliases=(),
         scheduler=Scheduler.PBS,
         cpus_per_node=128,
+        default_partition="standard",
+        # ERDC routes AFOSR (project ends in 'FX') jobs to the frontier queue
+        fx_partition="frontier",
         preferred_launcher="aprun",
         resource_cmd="show_usage",
         modules=(),
