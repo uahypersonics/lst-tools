@@ -505,7 +505,7 @@ class SeedTable(_ConfigBase):
     n_seeds: int = 12
 
     # acceptance floor: only stations with alpi >= min_growth contribute seeds
-    min_growth: float = 0.0
+    min_growth: float = 10.0
 
     # ridge tracker controls (forwarded to process.maxima._track_ridges)
     gate_tol: float = 0.05  # relative frequency gate for matching peaks across stations
@@ -552,6 +552,16 @@ class SeedTable(_ConfigBase):
     # output filename (must match SEED_FILE constant in seed_table.f90)
     output_file: str = "seed_alpha.dat"
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return a plain nested dict, omitting advanced internal fields."""
+        # build the full dict then drop the hidden keys
+        # smooth_passes and gate_by_keep_mask are advanced internal knobs with
+        # sensible defaults; excluded here so they don't clutter `lst-tools init`
+        # output, but still readable from lst.cfg via from_dict().
+        _hidden = frozenset({"smooth_passes", "gate_by_keep_mask"})
+        full = dataclasses.asdict(self)  # type: ignore[arg-type]
+        return {k: v for k, v in full.items() if k not in _hidden}
+
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> SeedTable:
         """Build a ``SeedTable`` from a plain dict."""
@@ -579,7 +589,7 @@ class SeedTable(_ConfigBase):
             enabled=_coerce_bool(_enabled) if _enabled is not None else False,
             source_file=_opt_str(_src),
             n_seeds=int(_n_seeds) if _n_seeds is not None else 12,
-            min_growth=float(_min_growth) if _min_growth is not None else 0.0,
+            min_growth=float(_min_growth) if _min_growth is not None else 10.0,
             gate_tol=float(_gate_tol) if _gate_tol is not None else 0.05,
             min_valid=int(_min_valid) if _min_valid is not None else 5,
             smooth_passes=int(_smooth_passes) if _smooth_passes is not None else 0,
