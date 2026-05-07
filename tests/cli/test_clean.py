@@ -61,7 +61,9 @@ def test_confirm_and_remove_no_targets_exits(capsys: pytest.CaptureFixture[str])
 
 
 def test_cmd_clean_parsing_force_removes_targets(tmp_path: Path) -> None:
-    """Remove parsing artifacts without prompting when force=True."""
+    """Remove parsing artifacts without prompting when force=True.
+    Run scripts (run.*.*) and run.log are intentionally kept.
+    """
     # build
     (tmp_path / "lst_input.dat").write_text("deck", encoding="utf-8")
     (tmp_path / "run.slurm.host").write_text("run", encoding="utf-8")
@@ -70,10 +72,11 @@ def test_cmd_clean_parsing_force_removes_targets(tmp_path: Path) -> None:
     # execute
     cmd_clean_parsing(directory=tmp_path, force=True)
 
-    # validate
+    # validate: input deck and solver artifacts removed
     assert not (tmp_path / "lst_input.dat").exists()
-    assert not (tmp_path / "run.slurm.host").exists()
     assert not (tmp_path / "Frequency01").exists()
+    # run scripts are preserved
+    assert (tmp_path / "run.slurm.host").exists()
 
 
 def test_cmd_clean_tracking_default_directory_scan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
