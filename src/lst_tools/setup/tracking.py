@@ -280,23 +280,26 @@ def smooth_contour_field(
     if npasses == 0:
         return field_2d.copy(), np.ones(field_2d.shape, dtype=bool)
 
+    # -- compute keep_mask ONCE from the original unsmoothed field -----------
+    # Rebuilding the mask each pass is a cascade bug: pass 1 generates a
+    # slightly wrong mask that zeroes the ridge tail → pass 2 sees less signal
+    # → by pass 5 the tracker is stranded and the tail is permanently lost.
+    # Computing on the original field ensures the mask always reflects the
+    # true data, regardless of how steep or curved the ridge is.
+
+    # tuneable parameters for ridge protection
+    RIDGE_DP_LAM = 0.6    # smoothness penalty (larger => smoother path)
+    RIDGE_DP_MAX_JUMP = 6  # max frequency-index change per x-step
+    RIDGE_HALF_WIDTH_BINS = 3  # protect ± this many freq bins around the path
+
+    # track ridge on the ORIGINAL field (before any smoothing passes)
+    j_star = _track_ridge_dp(field_2d, lam=RIDGE_DP_LAM, max_jump=RIDGE_DP_MAX_JUMP)
+
+    keep_mask = _keep_mask_from_path(
+        j_star, n_freq=field_2d.shape[0], half_width=RIDGE_HALF_WIDTH_BINS
+    )
+
     for ipass in range(npasses):
-
-        # --------------------------------------------------
-        # track a coherent ridge across x and protect a narrow band around it
-        # --------------------------------------------------
-
-        # tuneable parameters for ridge protection
-        RIDGE_DP_LAM = 0.6  # smoothness penalty (larger => smoother path)
-        RIDGE_DP_MAX_JUMP = 3  # max frequency-index change per x-step
-        RIDGE_HALF_WIDTH_BINS = 3  # protect ± this many freq bins around the path
-
-        # track ridge on the original field (avoid biasing the path)
-        j_star = _track_ridge_dp(field_2d, lam=RIDGE_DP_LAM, max_jump=RIDGE_DP_MAX_JUMP)
-
-        keep_mask = _keep_mask_from_path(
-            j_star, n_freq=field_2d.shape[0], half_width=RIDGE_HALF_WIDTH_BINS
-        )
 
         # --------------------------------------------------
         # smooth alpi_2d
