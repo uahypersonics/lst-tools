@@ -19,6 +19,7 @@ from typing import Annotated
 import typer
 
 from .cmd_clean import cmd_clean_parsing, cmd_clean_spectra, cmd_clean_tracking
+from .cmd_extract import cmd_extract
 from .cmd_hpc import cmd_hpc
 from .cmd_info import cmd_info
 from .cmd_init import cmd_init
@@ -172,6 +173,7 @@ cli.add_typer(setup_app, name="setup")
 cli.add_typer(clean_app, name="clean")
 cli.command(name="info")(cmd_info)
 cli.command(name="lastrac")(cmd_lastrac)
+cli.command(name="extract")(cmd_extract)
 cli.add_typer(process_app, name="process")
 cli.command(name="hpc")(cmd_hpc)
 cli.add_typer(

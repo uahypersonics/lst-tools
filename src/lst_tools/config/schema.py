@@ -722,6 +722,46 @@ class Processing(_ConfigBase):
 
 
 # --------------------------------------------------
+# ExtractConfig — wall-normal profile extraction settings
+# --------------------------------------------------
+@dataclasses.dataclass(eq=False)
+class ExtractConfig(_ConfigBase):
+    """Settings for ``lst-tools extract`` (FE-quad profile extraction)."""
+
+    # path to the Tecplot FE-quad input file (used when no CLI argument is given)
+    input_file: str | None = None
+    # output file paths (None means derive from the input file location)
+    hdf5_out: str | None = None
+    profiles_out: str | None = None
+    wall_out: str | None = None
+    # streamwise x-coordinates for profile extraction (None means use CLI default)
+    stations: list[float] | None = None
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ExtractConfig:
+        """Build an ``ExtractConfig`` from a plain dict."""
+        kw: dict[str, Any] = {}
+
+        # validate input_file
+        if "input_file" in d and d["input_file"] is not None:
+            kw["input_file"] = str(d["input_file"])
+
+        # validate optional output paths
+        for key in ("hdf5_out", "profiles_out", "wall_out"):
+            if key in d and d[key] is not None:
+                kw[key] = str(d[key])
+
+        # validate stations list
+        if "stations" in d and d["stations"] is not None:
+            raw_stations = d["stations"]
+            if not isinstance(raw_stations, (list, tuple)):
+                raise ValueError("extract.stations must be a list of floats")
+            kw["stations"] = [float(v) for v in raw_stations]
+
+        return cls(**kw)
+
+
+# --------------------------------------------------
 # Assembled Config (includes all sections)
 # --------------------------------------------------
 @dataclasses.dataclass(eq=False)
@@ -754,6 +794,7 @@ class Config(_ConfigBase):
     hpc: HpcConfig = dataclasses.field(default_factory=HpcConfig)
     processing: Processing = dataclasses.field(default_factory=Processing)
     seed_table: SeedTable = dataclasses.field(default_factory=SeedTable)
+    extract: ExtractConfig = dataclasses.field(default_factory=ExtractConfig)
 
     # validation method to check value constraints and raise ValueError if any violations are found
     def validate(self) -> Config:
@@ -829,6 +870,7 @@ class Config(_ConfigBase):
             hpc=HpcConfig.from_dict(d.get("hpc", {})),
             processing=Processing.from_dict(d.get("processing", {})),
             seed_table=SeedTable.from_dict(d.get("seed_table", {})),
+            extract=ExtractConfig.from_dict(d.get("extract", {})),
         )
         return cfg.validate()
 
