@@ -752,11 +752,15 @@ class ExtractConfig(_ConfigBase):
                 kw[key] = str(d[key])
 
         # validate stations list
+        # treat empty string as unset — matches the pattern used by other optional fields
         if "stations" in d and d["stations"] is not None:
             raw_stations = d["stations"]
-            if not isinstance(raw_stations, (list, tuple)):
+            if isinstance(raw_stations, str) and not raw_stations.strip():
+                pass  # empty string → leave stations at its default
+            elif not isinstance(raw_stations, (list, tuple)):
                 raise ValueError("extract.stations must be a list of floats")
-            kw["stations"] = [float(v) for v in raw_stations]
+            else:
+                kw["stations"] = [float(v) for v in raw_stations]
 
         return cls(**kw)
 
