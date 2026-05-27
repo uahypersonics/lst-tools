@@ -5,6 +5,8 @@ on:
         branches: [main, master, dev]
     pull_request:
 
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
     tests:
         runs-on: ubuntu-latest
