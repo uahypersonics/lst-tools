@@ -835,14 +835,6 @@ def _build_and_write_case(
     actual_idx_e = int(np.argmin(np.abs(x_baseflow - actual_x_e)))
     n_stations_tracking = abs(actual_idx_s - actual_idx_e) // i_step + 1
 
-    # sanity check: ensure at least one station will be computed for tracking
-    if n_stations_tracking < 1:
-        raise ValueError(
-            f"computed 0 tracking stations (actual_idx_s={actual_idx_s},"
-            f" actual_idx_e={actual_idx_e}, i_step={i_step})"
-            f" — check x_s/x_e and i_step in config"
-        )
-
     # user info: output the number of stations to be computed for tracking
     logger.info(
         "number of stations to be computed for tracking = %s"
@@ -917,16 +909,17 @@ def _build_and_write_case(
     # profile or live probe) may differ from the value used above when detection
     # fell back to 1 on a non-HPC machine.  Re-check and reduce nodes if needed
     # so the Fortran solver never receives more processors than x-stations.
-    real_ntasks = hpc_cfg.ntasks_per_node or 1
-    if (hpc_cfg.nodes or 1) * real_ntasks > n_stations_tracking:
+    real_ntasks = getattr(hpc_cfg, "ntasks_per_node", None) or 1
+    real_nodes = getattr(hpc_cfg, "nodes", None) or 1
+    if real_nodes * real_ntasks > n_stations_tracking:
         nodes_clamped = max(1, n_stations_tracking // real_ntasks)
         logger.warning(
             "total processors %s > x-stations %s after resolve "
             "(ntasks_per_node=%s); clamping nodes %s -> %s",
-            (hpc_cfg.nodes or 1) * real_ntasks,
+            real_nodes * real_ntasks,
             n_stations_tracking,
             real_ntasks,
-            hpc_cfg.nodes,
+            real_nodes,
             nodes_clamped,
         )
         hpc_cfg = hpc_configure(

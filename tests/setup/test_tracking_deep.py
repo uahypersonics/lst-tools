@@ -173,13 +173,19 @@ def test_build_and_write_case_downstream_uses_defaults(monkeypatch: pytest.Monke
     assert generated["cfg"].lst.params.x_s == 0.5
 
 
-def test_build_and_write_case_raises_when_station_count_zero(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Raise ValueError when i_step is too large and no stations would be tracked."""
+def test_build_and_write_case_large_i_step_yields_one_station(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With i_step >> station span the formula abs(span)//i_step+1 gives 1 station.
+
+    The old formula int((span+1)/i_step) could produce 0; the new formula
+    guarantees a minimum of 1.  Verify the node calculation reflects that.
+    """
     cfg = Config()
-    cfg.lst.params.tracking_dir = 1
+    cfg.lst.params.tracking_dir = 1  # upstream: x_e = x_ig
     cfg.lst.params.x_s = 0.0
     cfg.lst.params.x_e = 1.0
     cfg.lst.params.i_step = 999
+    cfg.hpc.nodes = None
+    cfg.hpc.time = None
 
     tp = _build_tp(
         np.array(
@@ -190,19 +196,41 @@ def test_build_and_write_case_raises_when_station_count_zero(monkeypatch: pytest
             ]
         )
     )
+    # x_baseflow has 3 points; initial_guess idx_x=1 → x_ig=0.5
+    # actual range: [0.0, 0.5] → abs(0-1)//999+1 = 1 station
     x_baseflow = np.array([0.0, 0.5, 1.0])
     initial_guess = {"idx_x": 1, "idx_f": 1, "alpi": 1.0, "alpr": 2.0, "freq": 200.0}
 
-    with pytest.raises(ValueError, match="computed 0 tracking stations"):
-        tracking_mod._build_and_write_case(
-            dir_name="kc_0010pt00",
-            cfg=cfg,
-            initial_guess=initial_guess,
-            betr_loc=10.0,
-            tp=tp,
-            x_baseflow=x_baseflow,
-            lst_exe="lst.x",
+    monkeypatch.setattr(tracking_mod, "detect", lambda: SimpleNamespace(cpus_per_node=4))
+
+    captured = {}
+
+    def _fake_hpc_configure(cfg_obj, *, set_defaults, nodes_override, time_override):
+        captured["nodes_override"] = nodes_override
+        return SimpleNamespace(
+            scheduler="slurm",
+            hostname="puma",
+            fname_run_script="run.slurm.puma",
+            nodes=nodes_override,
+            ntasks_per_node=4,
         )
+
+    monkeypatch.setattr(tracking_mod, "hpc_configure", _fake_hpc_configure)
+    monkeypatch.setattr(tracking_mod, "script_build", lambda *a, **kw: None)
+    monkeypatch.setattr(tracking_mod, "generate_lst_input_deck", lambda *, out_path, cfg: None)
+
+    tracking_mod._build_and_write_case(
+        dir_name="kc_0010pt00",
+        cfg=cfg,
+        initial_guess=initial_guess,
+        betr_loc=10.0,
+        tp=tp,
+        x_baseflow=x_baseflow,
+        lst_exe="lst.x",
+    )
+
+    # 1 station, 4 cpus/node → nodes_optimal = max(1, 1//4) = 1
+    assert captured["nodes_override"] == 1
 
 
 def test_auto_fill_tracking_updates_and_persists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
