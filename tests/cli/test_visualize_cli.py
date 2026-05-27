@@ -7,6 +7,8 @@ import types
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from typer.testing import CliRunner
 
 from lst_tools.cli.main import cli
@@ -138,21 +140,23 @@ class TestVisualizeCLI:
         self,
         _mock_bounds,
         mock_visualize_data,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
-        with runner.isolated_filesystem():
-            kc0 = Path("kc_0000")
-            kc5 = Path("kc_0005")
-            kc0.mkdir()
-            kc5.mkdir()
-            (kc0 / "growth_rate_with_nfact_amps.dat").write_text("dummy", encoding="utf-8")
-            (kc5 / "growth_rate_with_nfact_amps.dat").write_text("dummy", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        kc0 = tmp_path / "kc_0000"
+        kc5 = tmp_path / "kc_0005"
+        kc0.mkdir()
+        kc5.mkdir()
+        (kc0 / "growth_rate_with_nfact_amps.dat").write_text("dummy", encoding="utf-8")
+        (kc5 / "growth_rate_with_nfact_amps.dat").write_text("dummy", encoding="utf-8")
 
-            mock_visualize_data.side_effect = [
-                [Path("alpi_contours_tracking/alpi_kc_kc_0000_0000.png")],
-                [Path("alpi_contours_tracking/alpi_kc_kc_0005_0005.png")],
-            ]
+        mock_visualize_data.side_effect = [
+            [Path("alpi_contours_tracking/alpi_kc_kc_0000_0000.png")],
+            [Path("alpi_contours_tracking/alpi_kc_kc_0005_0005.png")],
+        ]
 
-            result = runner.invoke(cli, ["visualize", "tracking"])
+        result = runner.invoke(cli, ["visualize", "tracking"])
 
         assert result.exit_code == 0
         assert "tracking fallback: kc_* slices" in result.output
@@ -170,9 +174,11 @@ class TestVisualizeCLI:
         assert second_call["level_min_override"] == 0.0
         assert second_call["level_max_override"] == 50.0
 
-    def test_visualize_tracking_fallback_missing_all_inputs(self):
-        with runner.isolated_filesystem():
-            result = runner.invoke(cli, ["visualize", "tracking"])
+    def test_visualize_tracking_fallback_missing_all_inputs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(cli, ["visualize", "tracking"])
 
         assert result.exit_code != 0
         assert "lst_vol.dat not found and no kc_* tracking slices discovered" in result.output
@@ -221,16 +227,18 @@ class TestVisualizeHelpers:
         assert "alpha" in message
         assert "beta" in message
 
-    def test_discover_tracking_files_ignores_non_directories(self):
-        with runner.isolated_filesystem():
-            Path("kc_0000").mkdir()
-            Path("kc_0000/growth_rate_with_nfact_amps.dat").write_text(
-                "dummy", encoding="utf-8"
-            )
-            Path("kc_0005").mkdir()
-            Path("kc_0010").write_text("not a directory", encoding="utf-8")
+    def test_discover_tracking_files_ignores_non_directories(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "kc_0000").mkdir()
+        (tmp_path / "kc_0000" / "growth_rate_with_nfact_amps.dat").write_text(
+            "dummy", encoding="utf-8"
+        )
+        (tmp_path / "kc_0005").mkdir()
+        (tmp_path / "kc_0010").write_text("not a directory", encoding="utf-8")
 
-            result = _discover_tracking_files(Path("."))
+        result = _discover_tracking_files(Path("."))
 
         assert result == [Path("kc_0000/growth_rate_with_nfact_amps.dat")]
 
