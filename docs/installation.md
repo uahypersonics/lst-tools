@@ -13,6 +13,12 @@
 pip install lst-tools
 ```
 
+To upgrade an existing installation:
+
+```bash
+pip install --upgrade lst-tools
+```
+
 ## From Source
 
 ```bash

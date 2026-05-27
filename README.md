@@ -17,6 +17,12 @@ Pre- and post-processing toolkit for Linear Stability Theory (LST) analyses of h
 pip install lst-tools
 ```
 
+To upgrade an existing installation:
+
+```bash
+pip install --upgrade lst-tools
+```
+
 See the full installation guide: https://uahypersonics.github.io/lst-tools/installation/
 
 ## Quick Start

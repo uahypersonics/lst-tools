@@ -16,6 +16,12 @@ same workflow through both a [command-line interface (CLI)](cli-reference/index.
 pip install lst-tools
 ```
 
+To upgrade an existing installation:
+
+```bash
+pip install --upgrade lst-tools
+```
+
 See [Installation](installation.md) for detailed instructions.
 
 ### Run the Tool
