@@ -804,22 +804,6 @@ def _build_and_write_case(
 
     logger.info("skip index for tracking i_step = %s", i_step)
 
-    # compute number of stations that will be computed for tracking
-    n_stations_tracking = int((abs(idx_s - idx_e) + 1) / i_step)
-
-    # sanity check: ensure at least one station will be computed for tracking
-    if n_stations_tracking < 1:
-        raise ValueError(
-            f"computed 0 tracking stations (idx_s={idx_s}, idx_e={idx_e},"
-            f" i_step={i_step}) — check x_s/x_e and i_step in config"
-        )
-
-    # user info: ouptut the number of stations to be computed for tracking (only printed if --verbose/-v or higher)
-    logger.info(
-        "number of stations to be computed for tracking = %s",
-        n_stations_tracking,
-    )
-
     # wavenumber range (single beta)
     cfg_tracking.lst.params.beta_s = betr_loc
     cfg_tracking.lst.params.beta_e = betr_loc
@@ -827,7 +811,8 @@ def _build_and_write_case(
     cfg_tracking.lst.params.beta_init = betr_loc
 
     # set tracking x-range: one end keeps the user value, the other is
-    # overridden to the initial-guess location
+    # overridden to the initial-guess location (which may be clamped to the
+    # baseflow domain boundary if the user's x_s/x_e was out of range)
     x_ig = float(x[initial_guess["idx_x"]])
     if cfg.lst.params.tracking_dir == 0:
         # downstream: initial guess at x_s, track toward x_e
@@ -837,6 +822,35 @@ def _build_and_write_case(
         # upstream (default): initial guess at x_e, track toward x_s
         cfg_tracking.lst.params.x_s = x_s
         cfg_tracking.lst.params.x_e = x_ig
+
+    # compute number of stations using the ACTUAL x values written to the input
+    # deck — not the user's possibly out-of-range x_s/x_e.  The initial-guess
+    # location (x_ig) may have been clamped to the baseflow domain boundary, so
+    # using the user's original x_e would overestimate the station count and
+    # cause the Fortran solver to receive more processors than x-stations.
+    # NOTE: formula matches Fortran: (idx_e - idx_s) // i_step + 1
+    actual_x_s = cfg_tracking.lst.params.x_s
+    actual_x_e = cfg_tracking.lst.params.x_e
+    actual_idx_s = int(np.argmin(np.abs(x_baseflow - actual_x_s)))
+    actual_idx_e = int(np.argmin(np.abs(x_baseflow - actual_x_e)))
+    n_stations_tracking = abs(actual_idx_s - actual_idx_e) // i_step + 1
+
+    # sanity check: ensure at least one station will be computed for tracking
+    if n_stations_tracking < 1:
+        raise ValueError(
+            f"computed 0 tracking stations (actual_idx_s={actual_idx_s},"
+            f" actual_idx_e={actual_idx_e}, i_step={i_step})"
+            f" — check x_s/x_e and i_step in config"
+        )
+
+    # user info: output the number of stations to be computed for tracking
+    logger.info(
+        "number of stations to be computed for tracking = %s"
+        " (actual x_s=%.6g idx=%s, x_e=%.6g idx=%s)",
+        n_stations_tracking,
+        actual_x_s, actual_idx_s,
+        actual_x_e, actual_idx_e,
+    )
 
     # generate LST input deck (renderer handles the x_s/x_e -> x_min/x_max mapping)
     out_path = Path(dir_name) / "lst_input.dat"
@@ -898,6 +912,29 @@ def _build_and_write_case(
         nodes_override=nodes_final,
         time_override=time_final,
     )
+
+    # post-resolve safety clamp: the resolved ntasks_per_node (from cluster
+    # profile or live probe) may differ from the value used above when detection
+    # fell back to 1 on a non-HPC machine.  Re-check and reduce nodes if needed
+    # so the Fortran solver never receives more processors than x-stations.
+    real_ntasks = hpc_cfg.ntasks_per_node or 1
+    if (hpc_cfg.nodes or 1) * real_ntasks > n_stations_tracking:
+        nodes_clamped = max(1, n_stations_tracking // real_ntasks)
+        logger.warning(
+            "total processors %s > x-stations %s after resolve "
+            "(ntasks_per_node=%s); clamping nodes %s -> %s",
+            (hpc_cfg.nodes or 1) * real_ntasks,
+            n_stations_tracking,
+            real_ntasks,
+            hpc_cfg.nodes,
+            nodes_clamped,
+        )
+        hpc_cfg = hpc_configure(
+            cfg,
+            set_defaults=False,
+            nodes_override=nodes_clamped,
+            time_override=time_final,
+        )
     logger.debug(
         "hpc scheduler: %s, host: %s",
         hpc_cfg.scheduler,

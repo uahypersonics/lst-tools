@@ -127,12 +127,12 @@ def cmd_extract(
     debug = ctx.obj.get("debug", False) if ctx.obj else False
 
     try:
-        # -- load config (tolerates missing file; uses defaults) ---
+        # load config (tolerates missing file; uses defaults)
         config = read_config(path=cfg)
         ext_cfg = config.extract
         fc_cfg = config.flow_conditions
 
-        # -- resolve input file ---
+        # resolve input file
         # priority: CLI positional > [extract] input_file in cfg
         resolved_input: Path | None = input_file
         if resolved_input is None and ext_cfg.input_file is not None:
@@ -150,7 +150,7 @@ def cmd_extract(
             typer.echo(f"error: input file not found: {resolved_input}", err=True)
             raise typer.Exit(1)
 
-        # -- resolve output paths ---
+        # resolve output paths
         # priority: CLI flag > [extract] field in cfg > next to input file
         def _resolve_out(cli_val: Path | None, cfg_val: str | None, default_name: str) -> Path:
             if cli_val is not None:
@@ -163,12 +163,12 @@ def cmd_extract(
         resolved_profiles = _resolve_out(profiles_out, ext_cfg.profiles_out, "extracted_profiles.dat")
         resolved_wall = _resolve_out(wall_out, ext_cfg.wall_out, "wall_profile.dat")
 
-        # -- resolve flow conditions ---
+        # resolve flow conditions
         # priority: CLI flag > [flow_conditions] in cfg > built-in default
         resolved_mach: float = mach if mach is not None else (fc_cfg.mach if fc_cfg.mach is not None else 6.0)
         resolved_t_inf: float = t_inf if t_inf is not None else (fc_cfg.temp_inf if fc_cfg.temp_inf is not None else 50.0)
 
-        # -- resolve station x-coordinates ---
+        # resolve station x-coordinates
         # priority: CLI --station (repeatable) > [extract] stations in cfg > built-in defaults
         if station:
             resolved_stations = np.asarray(sorted(station), dtype=float)
@@ -183,15 +183,19 @@ def cmd_extract(
         logger.debug("mach=%.4f  T_inf=%.2f K", resolved_mach, resolved_t_inf)
         logger.debug("stations: %s", resolved_stations.tolist())
 
-        # -- read the Tecplot FE-quad file ---
+        # read the Tecplot FE-quad file
         typer.echo(f"reading {resolved_input}")
         dataset = read_fequad_block_tecplot(resolved_input)
+
+        typer.echo(f"dataset: {dataset.nodal['x'].size} nodes, {dataset.cell.shape[0]} cells")
 
         nodal_x = dataset.nodal["x"]
         nodal_y = dataset.nodal["y"]
 
-        # -- extract the lower wall boundary ---
+        # extract the lower wall boundary
         wall_x, wall_y = extract_lower_wall(nodal_x, nodal_y, dataset.connectivity)
+
+        # debug output 
         logger.debug(
             "lower wall: %d points, x in [%.4e, %.4e]",
             wall_x.size,
@@ -199,31 +203,35 @@ def cmd_extract(
             float(wall_x[-1]),
         )
 
-        # -- build the quad mesh sampler (nodal reconstruction + spatial index) ---
+        # build the quad mesh sampler (nodal reconstruction + spatial index)
         typer.echo("building mesh sampler (this may take a moment on large meshes)")
+
+        # debug output for devs
+        logger.debug("building mesh sampler with %d nodes and %d cells", nodal_x.size, dataset.cell.shape[0])
+
         mesh_sampler = build_quad_mesh_sampler(
             nodal_x, nodal_y, dataset.connectivity, dataset.cell
         )
 
-        # -- write the extracted wall curve diagnostic ---
+        # write the extracted wall curve diagnostic
         write_wall_profile_tecplot(resolved_wall, wall_x, wall_y)
         logger.debug("wall profile written: %s", resolved_wall)
 
-        # -- sample wall-normal profiles ---
+        # sample wall-normal profiles
         typer.echo(f"sampling {resolved_stations.size} profiles ({N_ETA} points each)")
         raw_profiles = sample_profiles(wall_x, wall_y, mesh_sampler, resolved_stations)
 
-        # -- compute freestream attributes ---
+        # compute freestream attributes
         freestream_attrs = compute_freestream_attrs(raw_profiles, resolved_mach, resolved_t_inf)
 
-        # -- write Tecplot profiles diagnostic ---
+        # write Tecplot profiles diagnostic
         write_profiles_tecplot(resolved_profiles, raw_profiles)
         logger.debug("profiles tecplot written: %s", resolved_profiles)
 
-        # -- write HDF5 baseflow file ---
+        # write HDF5 baseflow file 
         write_profiles_hdf5(resolved_hdf5, raw_profiles, freestream_attrs)
 
-        # -- print summary for the user ---
+        # print summary for the user
         typer.echo(f"{resolved_input} -> {resolved_hdf5}")
         typer.echo(f"  stations: {resolved_stations.size}")
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")

@@ -14,10 +14,16 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import logging
 
 import h5py
 import numpy as np
 
+
+# --------------------------------------------------
+# set up logger
+# --------------------------------------------------
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------
 # constants
@@ -137,6 +143,8 @@ def read_fequad_block_tecplot(path: str | Path) -> TecplotUnstructuredData:
     # read full file text and split into lines
     text = file_path.read_text()
     lines = text.splitlines()
+
+    logger.debug("read %d lines from %s", len(lines), file_path)
 
     # parse variable names from the first header line
     variables_text = lines[0].split("=", 1)[1]
@@ -275,10 +283,12 @@ def extract_lower_wall(
         boundary_loop,
         key=lambda node_id: (nodal_y[node_id - 1], nodal_x[node_id - 1]),
     )
+
     neighbor_a, neighbor_b = boundary_loop[start_node]
 
     # choose the branch that stays on the lower wall and moves downstream
     start_neighbors = [neighbor_a, neighbor_b]
+
     next_node = min(
         start_neighbors,
         key=lambda node_id: (nodal_y[node_id - 1], -nodal_x[node_id - 1]),
@@ -286,6 +296,7 @@ def extract_lower_wall(
 
     # trace the boundary in the chosen direction
     wall_nodes = [start_node, next_node]
+    
     previous_node = start_node
     current_node = next_node
 
@@ -452,6 +463,7 @@ def build_quad_mesh_sampler(
 
     # only reconstruct fields required for profile extraction
     selected_fields = {field_name: cell_fields[field_name] for field_name in REQUIRED_FIELDS}
+
     nodal_fields = reconstruct_nodal_fields(
         nodal_x,
         nodal_y,
@@ -476,11 +488,15 @@ def build_quad_mesh_sampler(
 
     # size the spatial bin grid from the mesh size and aspect ratio
     n_cell = zero_based_connectivity.shape[0]
+
     extent_x = max(x_max - x_min, 1.0e-12)
     extent_y = max(y_max - y_min, 1.0e-12)
+
     aspect_ratio = extent_x / extent_y
+
     n_bin_x = max(1, int(np.ceil(np.sqrt(n_cell * aspect_ratio))))
     n_bin_y = max(1, int(np.ceil(np.sqrt(n_cell / aspect_ratio))))
+
     bin_size_x = extent_x / n_bin_x
     bin_size_y = extent_y / n_bin_y
 
@@ -526,7 +542,7 @@ def build_quad_mesh_sampler(
 
 
 # --------------------------------------------------
-# barycentric interpolation
+# compute barycentric weights
 # --------------------------------------------------
 def compute_triangle_barycentric_weights(
     point_x: float,
@@ -552,6 +568,7 @@ def compute_triangle_barycentric_weights(
         (tri_y[1] - tri_y[2]) * (tri_x[0] - tri_x[2])
         + (tri_x[2] - tri_x[1]) * (tri_y[0] - tri_y[2])
     )
+
     if abs(denominator) <= 1.0e-14:
         # degenerate triangle
         return None
@@ -561,10 +578,12 @@ def compute_triangle_barycentric_weights(
         (tri_y[1] - tri_y[2]) * (point_x - tri_x[2])
         + (tri_x[2] - tri_x[1]) * (point_y - tri_y[2])
     ) / denominator
+
     weight_b = (
         (tri_y[2] - tri_y[0]) * (point_x - tri_x[2])
         + (tri_x[0] - tri_x[2]) * (point_y - tri_y[2])
     ) / denominator
+   
     weight_c = 1.0 - weight_a - weight_b
 
     weights = np.asarray([weight_a, weight_b, weight_c], dtype=float)
@@ -576,6 +595,9 @@ def compute_triangle_barycentric_weights(
     return weights
 
 
+# --------------------------------------------------
+# compute bilinear map inverse for quads
+# --------------------------------------------------
 def build_interpolation_stencil(
     mesh_sampler: QuadMeshSampler,
     cell_index: int,
@@ -611,7 +633,9 @@ def build_interpolation_stencil(
 
     # split quad into two triangles and test each
     triangle_sets = ((0, 1, 2), (0, 2, 3))
+
     for triangle_local in triangle_sets:
+
         node_indices = tuple(int(cell_nodes[local_index]) for local_index in triangle_local)
         tri_x = mesh_sampler.nodal_x[np.asarray(node_indices, dtype=int)]
         tri_y = mesh_sampler.nodal_y[np.asarray(node_indices, dtype=int)]
