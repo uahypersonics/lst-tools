@@ -39,8 +39,18 @@ SUTHERLAND_S = 110.4
 # wall-normal grid size
 N_ETA = 200
 
-# flow field names expected in the cell-centered dataset
+# flow field names expected in the dataset (internal canonical names)
 REQUIRED_FIELDS = ("u", "v", "w", "t", "p", "rho")
+
+# mapping from common Tecplot variable names to canonical names
+FIELD_NAME_MAP = {
+    "uvel": "u", "u": "u", "u-velocity": "u",
+    "vvel": "v", "v": "v", "v-velocity": "v",
+    "wvel": "w", "w": "w", "w-velocity": "w",
+    "temp": "t", "t": "t", "temperature": "t",
+    "pres": "p", "p": "p", "pressure": "p",
+    "dens": "rho", "rho": "rho", "density": "rho",
+}
 
 
 # --------------------------------------------------
@@ -146,41 +156,121 @@ def read_fequad_block_tecplot(path: str | Path) -> TecplotUnstructuredData:
 
     logger.debug("read %d lines from %s", len(lines), file_path)
 
-    # parse variable names from the first header line
-    variables_text = lines[0].split("=", 1)[1]
-    variable_names = [item.strip() for item in variables_text.split(",")]
+    # parse variable names - may be comma-separated on one line or one per line
+    variable_names: list[str] = []
+    header_end_line = 0
+    in_variables = False
+    for line_num, line in enumerate(lines):
+        stripped = line.strip()
+        upper = stripped.upper()
 
-    # parse node and element counts from the zone header
-    size_match = re.search(r"N=(\d+),\s*E=(\d+)", lines[1])
-    if size_match is None:
+        if upper.startswith("VARIABLES"):
+            in_variables = True
+            after_eq = stripped.split("=", 1)[1].strip() if "=" in stripped else ""
+            if after_eq:
+                for var in re.findall(r'"([^"]+)"', after_eq):
+                    variable_names.append(var)
+                if not after_eq.startswith('"'):
+                    for var in after_eq.replace(",", " ").split():
+                        if var.strip():
+                            variable_names.append(var.strip())
+            continue
+
+        if in_variables and stripped.startswith('"'):
+            for var in re.findall(r'"([^"]+)"', stripped):
+                variable_names.append(var)
+            continue
+
+        if upper.startswith("ZONE"):
+            in_variables = False
+            header_end_line = line_num
+            break
+
+    logger.debug("parsed %d variable names: %s", len(variable_names), variable_names)
+
+    # find zone header and parse node/element counts
+    n_node = 0
+    n_elem = 0
+    data_start_line = header_end_line
+    for line_num in range(header_end_line, min(header_end_line + 10, len(lines))):
+        line = lines[line_num]
+        # try both shorthand (N=, E=) and full (Nodes=, Elements=) forms
+        node_match = re.search(r"(?:Nodes|N)\s*=\s*(\d+)", line, re.IGNORECASE)
+        elem_match = re.search(r"(?:Elements|E)\s*=\s*(\d+)", line, re.IGNORECASE)
+        if node_match:
+            n_node = int(node_match.group(1))
+        if elem_match:
+            n_elem = int(elem_match.group(1))
+        # data starts after DATAPACKING line
+        if "DATAPACKING" in line.upper():
+            data_start_line = line_num + 1
+        # skip DT line if present
+        if line.strip().upper().startswith("DT"):
+            data_start_line = line_num + 1
+
+    if n_node == 0 or n_elem == 0:
         raise ValueError("Could not parse N and E from Tecplot zone header")
 
-    n_node = int(size_match.group(1))
-    n_elem = int(size_match.group(2))
+    # determine which variables are cell-centered (via VARLOCATION or default)
+    cell_centered_indices: set[int] = set()
+    for line_num in range(header_end_line, min(header_end_line + 10, len(lines))):
+        line = lines[line_num].upper()
+        vl_match = re.search(r"VARLOCATION.*=.*\(\s*(\[[\d,\-]+\])\s*=\s*CELLCENTERED", line)
+        if vl_match:
+            range_str = vl_match.group(1)
+            range_match = re.match(r"\[(\d+)-(\d+)\]", range_str)
+            if range_match:
+                start_idx = int(range_match.group(1))
+                end_idx = int(range_match.group(2))
+                cell_centered_indices.update(range(start_idx, end_idx + 1))
 
-    # tokenize the numeric body after the 4-line header using a regex
+    logger.debug("n_node=%d, n_elem=%d, data starts at line %d", n_node, n_elem, data_start_line)
+    logger.debug("cell-centered var indices: %s", cell_centered_indices)
+
+    # tokenize the numeric body after the header using a regex
     # that matches both fixed-point and scientific-notation numbers
-    body_text = "\n".join(lines[4:])
+    body_text = "\n".join(lines[data_start_line:])
     token_pattern = r"[-+]?\d*\.\d+(?:[Ee][-+]?\d+)?|[-+]?\d+(?:[Ee][-+]?\d+)?"
     numeric_tokens = [float(token) for token in re.findall(token_pattern, body_text)]
 
     # split the token stream into nodal and cell-centered variable blocks
+    # index is 1-based in VARLOCATION
     index = 0
     nodal: dict[str, np.ndarray] = {}
-    for name in variable_names[:3]:
-        # first 3 variables are nodal coordinates (x, y, z)
-        nodal[name] = np.asarray(numeric_tokens[index:index + n_node], dtype=float)
-        index += n_node
-
     cell: dict[str, np.ndarray] = {}
-    for name in variable_names[3:]:
-        # remaining variables are cell-centered flow fields
-        cell[name] = np.asarray(numeric_tokens[index:index + n_elem], dtype=float)
-        index += n_elem
+
+    for var_idx, name in enumerate(variable_names):
+        tecplot_idx = var_idx + 1  # 1-based for VARLOCATION
+        if tecplot_idx in cell_centered_indices:
+            cell[name] = np.asarray(numeric_tokens[index:index + n_elem], dtype=float)
+            index += n_elem
+        else:
+            nodal[name] = np.asarray(numeric_tokens[index:index + n_node], dtype=float)
+            index += n_node
 
     # read the FE quadrilateral connectivity table (1-based node indices)
     connectivity_values = numeric_tokens[index:index + 4 * n_elem]
     connectivity = np.asarray(connectivity_values, dtype=int).reshape(n_elem, 4)
+
+    # apply field name mapping to canonical names
+    def remap_fields(fields: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        remapped: dict[str, np.ndarray] = {}
+        for name, data in fields.items():
+            canonical = FIELD_NAME_MAP.get(name.lower(), name)
+            remapped[canonical] = data
+        return remapped
+
+    nodal = remap_fields(nodal)
+    cell = remap_fields(cell)
+
+    # add w=0 for 2D flows if not present
+    if "w" not in nodal and "w" not in cell:
+        if nodal:
+            sample_arr = next(iter(nodal.values()))
+            nodal["w"] = np.zeros(sample_arr.size, dtype=float)
+        elif cell:
+            sample_arr = next(iter(cell.values()))
+            cell["w"] = np.zeros(sample_arr.size, dtype=float)
 
     return TecplotUnstructuredData(
         nodal=nodal,
@@ -263,7 +353,9 @@ def extract_lower_wall(
     nodal_y: np.ndarray,
     connectivity: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Extract the downstream lower wall from the outer boundary loop.
+    """Extract the body-surface wall from the boundary loop.
+
+    Thin wrapper around ``extract_body_wall`` for backward compatibility.
 
     Args:
         nodal_x: Node x-coordinates.
@@ -271,22 +363,157 @@ def extract_lower_wall(
         connectivity: FE quadrilateral connectivity (1-based).
 
     Returns:
-        Sorted arrays ``wall_x`` and ``wall_y`` for the lower wall.
+        Wall x and y arrays in loop order (arc from trailing edge to trailing edge).
+    """
+    return extract_body_wall(nodal_x, nodal_y, connectivity)
+
+
+def extract_body_wall(
+    nodal_x: np.ndarray,
+    nodal_y: np.ndarray,
+    connectivity: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Extract the body-surface arc from the boundary loop.
+
+    For 2D body cross-sections (like delta wing slices), the physical wall is the
+    complete body surface — an open arc near y≈0 running from one trailing-edge
+    endpoint through the nose to the other trailing-edge endpoint. The farfield
+    boundary lies at large |y|.
+
+    Strategy:
+    1. Walk the single closed boundary loop.
+    2. Classify each node as body-surface (|y| < tol) vs. farfield (|y| >= tol),
+       where tol = 5% of (y_max - y_min).
+    3. Extract the longest contiguous sub-chain of body-surface nodes.
+    4. Return nodes in loop order (geometric arc order), NOT sorted by x.
+
+    Falls back to envelope-based extraction if no body-surface sub-chain is found.
+
+    Args:
+        nodal_x: Node x-coordinates.
+        nodal_y: Node y-coordinates.
+        connectivity: FE quadrilateral connectivity (1-based).
+
+    Returns:
+        Wall x and y arrays in loop order (arc from trailing edge through nose
+        to trailing edge).
     """
 
-    # build the full outer boundary graph from element edges
+    try:
+        wall_x, wall_y = _extract_body_surface_arc(nodal_x, nodal_y, connectivity)
+        if wall_x.size > 10:
+            return wall_x, wall_y
+        logger.debug("body-surface arc found only %d points, falling back", wall_x.size)
+    except ValueError as e:
+        logger.debug("body-surface extraction failed: %s, trying envelope", e)
+
+    # fall back to lower-envelope approach
+    return _extract_lower_wall_envelope(nodal_x, nodal_y, connectivity)
+
+
+def _extract_body_surface_arc(
+    nodal_x: np.ndarray,
+    nodal_y: np.ndarray,
+    connectivity: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Extract the body-surface arc as the longest |y|<tol sub-chain.
+
+    Args:
+        nodal_x: Node x-coordinates.
+        nodal_y: Node y-coordinates.
+        connectivity: FE quadrilateral connectivity (1-based).
+
+    Returns:
+        Wall x and y arrays in loop order (NOT sorted by x).
+
+    Raises:
+        ValueError: If boundary loop cannot be built or no body-surface arc found.
+    """
+
+    # build the boundary loop
     boundary_edges = build_boundary_edges(connectivity)
     boundary_loop = order_boundary_loop(boundary_edges)
 
-    # find the nose node: minimum (y, -x) key anchors the leftmost/lowest point
+    # walk the full loop to get ordered node list
+    start_node = next(iter(boundary_loop.keys()))
+    ordered_nodes = [start_node]
+    prev_node = start_node
+    curr_node = boundary_loop[start_node][0]
+
+    while curr_node != start_node:
+        ordered_nodes.append(curr_node)
+        neighbor_a, neighbor_b = boundary_loop[curr_node]
+        next_node = neighbor_b if neighbor_a == prev_node else neighbor_a
+        prev_node = curr_node
+        curr_node = next_node
+
+    # define body-surface tolerance: 5% of y-range
+    y_min = nodal_y.min()
+    y_max = nodal_y.max()
+    tol = 0.05 * (y_max - y_min)
+
+    # TODO: for real data, prefer |u| + |v| < tol_vel as wall classifier
+    # (no-slip condition gives u=v=0 on wall nodes but not on farfield nodes)
+
+    # mark each node as body-surface vs. farfield (1-based indexing)
+    is_body = [abs(nodal_y[node - 1]) < tol for node in ordered_nodes]
+
+    # find contiguous sub-chains of body-surface nodes
+    segments: list[list[int]] = []
+    current_segment: list[int] = []
+
+    for i, node in enumerate(ordered_nodes):
+        if is_body[i]:
+            current_segment.append(node)
+        else:
+            if current_segment:
+                segments.append(current_segment)
+                current_segment = []
+
+    if current_segment:
+        segments.append(current_segment)
+
+    # handle wrap-around: if first and last segments are both body-surface, merge them
+    if len(segments) >= 2 and is_body[0] and is_body[-1]:
+        segments[0] = segments[-1] + segments[0]
+        segments.pop()
+
+    if not segments:
+        raise ValueError("No body-surface boundary segment found")
+
+    # select the longest sub-chain (the body-surface arc)
+    longest_segment = max(segments, key=len)
+    logger.debug("found %d body-surface segments, longest has %d nodes",
+                 len(segments), len(longest_segment))
+
+    # extract coordinates in loop order (NOT sorted by x)
+    # this preserves the arc geometry: TE-lower → nose → TE-upper
+    wall_nodes = np.array(longest_segment)
+    wall_x = nodal_x[wall_nodes - 1]
+    wall_y = nodal_y[wall_nodes - 1]
+
+    logger.debug("body-surface arc: %d points, x in [%.4e, %.4e], y in [%.4e, %.4e]",
+                 wall_x.size, wall_x.min(), wall_x.max(), wall_y.min(), wall_y.max())
+
+    return wall_x, wall_y
+
+
+def _extract_lower_wall_boundary(
+    nodal_x: np.ndarray,
+    nodal_y: np.ndarray,
+    connectivity: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Extract the lower wall by tracing boundary edges (original algorithm)."""
+
+    boundary_edges = build_boundary_edges(connectivity)
+    boundary_loop = order_boundary_loop(boundary_edges)
+
     start_node = min(
         boundary_loop,
         key=lambda node_id: (nodal_y[node_id - 1], nodal_x[node_id - 1]),
     )
 
     neighbor_a, neighbor_b = boundary_loop[start_node]
-
-    # choose the branch that stays on the lower wall and moves downstream
     start_neighbors = [neighbor_a, neighbor_b]
 
     next_node = min(
@@ -294,9 +521,7 @@ def extract_lower_wall(
         key=lambda node_id: (nodal_y[node_id - 1], -nodal_x[node_id - 1]),
     )
 
-    # trace the boundary in the chosen direction
     wall_nodes = [start_node, next_node]
-    
     previous_node = start_node
     current_node = next_node
 
@@ -314,11 +539,9 @@ def extract_lower_wall(
         previous_node = current_node
         current_node = next_candidate
 
-    # convert node indices to physical coordinates (Tecplot is 1-based)
     traced_x = nodal_x[np.asarray(wall_nodes) - 1]
     traced_y = nodal_y[np.asarray(wall_nodes) - 1]
 
-    # truncate when the boundary turns back upstream (dx <= 0)
     dx = np.diff(traced_x)
     non_increasing = np.where(dx <= 1.0e-12)[0]
     if non_increasing.size > 0:
@@ -328,6 +551,96 @@ def extract_lower_wall(
     else:
         wall_x = traced_x
         wall_y = traced_y
+
+    return wall_x, wall_y
+
+
+def _extract_lower_wall_envelope(
+    nodal_x: np.ndarray,
+    nodal_y: np.ndarray,
+    connectivity: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Extract the lower wall as the lower envelope of mesh cell edges.
+
+    Finds edges on the lower boundary by checking if each quad edge has y
+    values that are local minima.
+    """
+
+    # convert 1-based to 0-based indexing
+    zero_conn = connectivity - 1
+
+    # collect all unique edges with their y-coordinates
+    edge_min_y: dict[tuple[int, int], float] = {}
+    edge_count: dict[tuple[int, int], int] = Counter()
+
+    for quad in zero_conn:
+        edges = [
+            (quad[0], quad[1]),
+            (quad[1], quad[2]),
+            (quad[2], quad[3]),
+            (quad[3], quad[0]),
+        ]
+        for n0, n1 in edges:
+            key = tuple(sorted((n0, n1)))
+            edge_count[key] += 1
+            y_avg = 0.5 * (nodal_y[n0] + nodal_y[n1])
+            if key not in edge_min_y or y_avg < edge_min_y[key]:
+                edge_min_y[key] = y_avg
+
+    # keep boundary edges (shared by only one cell)
+    boundary_edges = [e for e, c in edge_count.items() if c == 1]
+
+    if not boundary_edges:
+        raise ValueError("No boundary edges found in mesh")
+
+    # find the overall y range to define "lower" region
+    all_y = nodal_y
+    y_mid = 0.5 * (all_y.min() + all_y.max())
+
+    # filter to edges in the lower half
+    lower_edges = []
+    for n0, n1 in boundary_edges:
+        y_avg = 0.5 * (nodal_y[n0] + nodal_y[n1])
+        if y_avg < y_mid:
+            lower_edges.append((n0, n1))
+
+    if not lower_edges:
+        raise ValueError("No lower boundary edges found")
+
+    # collect unique nodes from lower edges
+    lower_nodes = set()
+    for n0, n1 in lower_edges:
+        lower_nodes.add(n0)
+        lower_nodes.add(n1)
+
+    # sort by x coordinate
+    sorted_nodes = sorted(lower_nodes, key=lambda n: nodal_x[n])
+
+    wall_x = nodal_x[sorted_nodes]
+    wall_y = nodal_y[sorted_nodes]
+
+    # remove duplicate x values (keep minimum y)
+    unique_x = []
+    unique_y = []
+    prev_x = None
+    for x, y in zip(wall_x, wall_y):
+        if prev_x is None or abs(x - prev_x) > 1e-12:
+            unique_x.append(x)
+            unique_y.append(y)
+            prev_x = x
+        elif y < unique_y[-1]:
+            unique_y[-1] = y
+
+    wall_x = np.array(unique_x)
+    wall_y = np.array(unique_y)
+
+    # ensure strictly increasing x (downstream direction)
+    increasing_mask = np.concatenate([[True], np.diff(wall_x) > 1e-12])
+    wall_x = wall_x[increasing_mask]
+    wall_y = wall_y[increasing_mask]
+
+    logger.debug("lower wall envelope: %d points, x in [%.4e, %.4e]",
+                 wall_x.size, wall_x[0], wall_x[-1])
 
     return wall_x, wall_y
 
@@ -442,6 +755,7 @@ def build_quad_mesh_sampler(
     nodal_y: np.ndarray,
     connectivity: np.ndarray,
     cell_fields: dict[str, np.ndarray],
+    existing_nodal_fields: dict[str, np.ndarray] | None = None,
 ) -> QuadMeshSampler:
     """Build a scalable quad mesh sampler with a uniform spatial bin index.
 
@@ -450,6 +764,7 @@ def build_quad_mesh_sampler(
         nodal_y: Node y-coordinates.
         connectivity: FE quad connectivity (E × 4, 1-based).
         cell_fields: Cell-centered flow variable arrays.
+        existing_nodal_fields: Optional pre-existing nodal fields (skip reconstruction).
 
     Returns:
         Populated ``QuadMeshSampler`` ready for point queries.
@@ -458,20 +773,25 @@ def build_quad_mesh_sampler(
     # convert 1-based Tecplot connectivity to 0-based indexing
     zero_based_connectivity = connectivity - 1
 
-    # compute cell centroids and reconstruct nodal values for interpolation
+    # compute cell centroids
     cell_x, cell_y = build_cell_centers(nodal_x, nodal_y, connectivity)
 
-    # only reconstruct fields required for profile extraction
-    selected_fields = {field_name: cell_fields[field_name] for field_name in REQUIRED_FIELDS}
-
-    nodal_fields = reconstruct_nodal_fields(
-        nodal_x,
-        nodal_y,
-        zero_based_connectivity,
-        cell_x,
-        cell_y,
-        selected_fields,
-    )
+    # use existing nodal fields if available, otherwise reconstruct from cell data
+    if existing_nodal_fields is not None and all(
+        f in existing_nodal_fields for f in REQUIRED_FIELDS
+    ):
+        nodal_fields = {f: existing_nodal_fields[f] for f in REQUIRED_FIELDS}
+        logger.debug("using existing nodal fields (no reconstruction needed)")
+    else:
+        selected_fields = {field_name: cell_fields[field_name] for field_name in REQUIRED_FIELDS}
+        nodal_fields = reconstruct_nodal_fields(
+            nodal_x,
+            nodal_y,
+            zero_based_connectivity,
+            cell_x,
+            cell_y,
+            selected_fields,
+        )
 
     # precompute cell bounding boxes for fast point-in-cell rejection
     quad_x = nodal_x[zero_based_connectivity]
@@ -775,17 +1095,20 @@ def build_station_normals(
     wall_x: np.ndarray,
     wall_y: np.ndarray,
     station_x: np.ndarray,
+    body_centroid: tuple[float, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Build station locations and outward unit normals from the wall polyline.
+    """Build station locations and unit normals pointing outward from the body.
 
-    The tangent t_hat = (dx/ds, dy/ds) is computed by second-order centered
-    finite differences.  The outward normal is n_hat = (-dy/ds, dx/ds),
-    sign-corrected so n_y > 0.
+    The wall may be an arc in loop order (not sorted by x). For each station_x,
+    finds the closest wall point by arc-length search, computes the local tangent
+    and normal, and sign-corrects the normal to point away from the body centroid.
 
     Args:
-        wall_x: Wall x-coordinates.
+        wall_x: Wall x-coordinates (may be in loop order, not sorted).
         wall_y: Wall y-coordinates.
         station_x: Streamwise x-coordinates for the extraction stations.
+        body_centroid: (x, y) centroid of the body surface. Normals point away
+            from this point. If None, uses the mean of wall coordinates.
 
     Returns:
         Tuple of (station_y, station_s, normal_x, normal_y, wall_s).
@@ -794,32 +1117,57 @@ def build_station_normals(
     # compute the wall arc-length coordinate
     wall_s = compute_wall_arc_length(wall_x, wall_y)
 
-    # interpolate wall height and arc length at each station
-    station_y = np.interp(station_x, wall_x, wall_y)
-    station_s = np.interp(station_x, wall_x, wall_s)
+    # compute body centroid if not provided
+    if body_centroid is None:
+        body_centroid = (float(np.mean(wall_x)), float(np.mean(wall_y)))
+    centroid_x, centroid_y = body_centroid
+
+    # for each station_x, find the wall point(s) at that x
+    # if multiple matches (upper/lower surface), pick the first one in loop order
+    station_y = np.zeros(station_x.size)
+    station_s = np.zeros(station_x.size)
+    station_indices = np.zeros(station_x.size, dtype=int)
+
+    for i, sx in enumerate(station_x):
+        # find wall points closest to this x
+        x_dist = np.abs(wall_x - sx)
+        closest_idx = int(np.argmin(x_dist))
+        station_indices[i] = closest_idx
+        station_y[i] = wall_y[closest_idx]
+        station_s[i] = wall_s[closest_idx]
 
     # differentiate the wall polyline with respect to arc length
     edge_order = 2 if wall_x.size >= 3 else 1
     tangent_x = np.gradient(wall_x, wall_s, edge_order=edge_order)
     tangent_y = np.gradient(wall_y, wall_s, edge_order=edge_order)
 
-    # interpolate tangent components to station locations
-    station_tangent_x = np.interp(station_s, wall_s, tangent_x)
-    station_tangent_y = np.interp(station_s, wall_s, tangent_y)
+    # get tangent at each station
+    station_tangent_x = tangent_x[station_indices]
+    station_tangent_y = tangent_y[station_indices]
 
     # normalize the tangent vectors
     tangent_norm = np.hypot(station_tangent_x, station_tangent_y)
     station_tangent_x = station_tangent_x / tangent_norm
     station_tangent_y = station_tangent_y / tangent_norm
 
-    # rotate tangent 90 degrees counterclockwise to get the outward normal
+    # rotate tangent 90 degrees counterclockwise to get a candidate normal
     normal_x = -station_tangent_y
     normal_y = station_tangent_x
 
-    # sign-correct to ensure the normal points away from the wall (n_y > 0)
-    flip_mask = normal_y < 0.0
-    normal_x[flip_mask] *= -1.0
-    normal_y[flip_mask] *= -1.0
+    # sign-correct to point away from body centroid (into the flow domain)
+    for i in range(station_x.size):
+        # vector from body centroid to station point
+        to_station_x = wall_x[station_indices[i]] - centroid_x
+        to_station_y = station_y[i] - centroid_y
+
+        # check if normal points in same general direction as centroid-to-station
+        dot = normal_x[i] * to_station_x + normal_y[i] * to_station_y
+        if dot < 0:
+            # normal points toward centroid, flip it
+            normal_x[i] *= -1.0
+            normal_y[i] *= -1.0
+
+    logger.debug("station normals: centroid=(%.4e, %.4e)", centroid_x, centroid_y)
 
     return station_y, station_s, normal_x, normal_y, wall_s
 
@@ -830,7 +1178,7 @@ def compute_eta_max(
     wall_x: np.ndarray,
     wall_y: np.ndarray,
 ) -> float:
-    """Estimate the wall-normal profile extent as the 95th percentile cell height.
+    """Estimate the wall-normal profile extent as the 95th percentile cell distance.
 
     Args:
         cell_x: Cell centroid x-coordinates.
@@ -842,9 +1190,9 @@ def compute_eta_max(
         eta_max in physical length units.
     """
 
-    # interpolate wall height to centroid x locations and compute cell elevation
+    # interpolate wall height to centroid x locations and compute cell distance
     wall_y_at_cells = np.interp(cell_x, wall_x, wall_y)
-    wall_distance = cell_y - wall_y_at_cells
+    wall_distance = np.abs(cell_y - wall_y_at_cells)
 
     # use the 95th percentile to avoid far-field corner cells skewing the range
     eta_max = float(np.quantile(wall_distance, 0.95))
@@ -883,17 +1231,23 @@ def sample_profiles(
     if np.any(np.diff(station_x) <= 0.0):
         raise ValueError("station_x must be strictly increasing")
 
-    if station_x[0] < wall_x[0] or station_x[-1] > wall_x[-1]:
+    # use min/max of wall_x for range check (wall may be in loop order, not sorted)
+    wall_x_min, wall_x_max = float(wall_x.min()), float(wall_x.max())
+    if station_x[0] < wall_x_min or station_x[-1] > wall_x_max:
         raise ValueError(
             "station_x must lie within the extracted wall x-range "
-            f"[{wall_x[0]:.6e}, {wall_x[-1]:.6e}]"
+            f"[{wall_x_min:.6e}, {wall_x_max:.6e}]"
         )
+
+    # compute body centroid for normal direction (normals point away from body)
+    body_centroid = (float(np.mean(wall_x)), float(np.mean(wall_y)))
 
     # build station locations and wall-normal unit vectors
     station_y, station_s, station_normal_x, station_normal_y, _ = build_station_normals(
         wall_x,
         wall_y,
         station_x,
+        body_centroid=body_centroid,
     )
 
     # estimate the wall-normal profile extent from cell elevations
@@ -930,9 +1284,26 @@ def sample_profiles(
         rho_profile = np.zeros(n_eta, dtype=float)
 
         previous_cell_index: int | None = None
-        previous_values: dict[str, float] | None = None
+        first_valid_values: dict[str, float] | None = None
+        first_valid_idx: int = 0
 
+        # find the first eta index where cells exist (skip wall boundary gap)
         for eta_index in range(n_eta):
+            point_x = float(sample_x[eta_index])
+            point_y = float(sample_y[eta_index])
+            stencil = locate_interpolation_stencil(mesh_sampler, point_x, point_y, None)
+            if stencil is not None:
+                first_valid_idx = eta_index
+                first_valid_values = sample_fields_from_stencil(mesh_sampler, stencil)
+                previous_cell_index = stencil.cell_index
+                break
+        else:
+            raise ValueError(
+                f"Could not locate any sample point for station x={x0:.6e}"
+            )
+
+        # sample from first_valid_idx onward
+        for eta_index in range(first_valid_idx, n_eta):
             point_x = float(sample_x[eta_index])
             point_y = float(sample_y[eta_index])
 
@@ -945,15 +1316,11 @@ def sample_profiles(
 
             if stencil is None:
                 # extrapolate using the last successfully sampled point
-                if previous_values is None:
-                    raise ValueError(
-                        f"Could not locate sample point at x={point_x:.6e}, y={point_y:.6e}"
-                    )
-                sampled_values = previous_values.copy()
+                sampled_values = first_valid_values.copy()
             else:
                 sampled_values = sample_fields_from_stencil(mesh_sampler, stencil)
                 previous_cell_index = stencil.cell_index
-                previous_values = sampled_values.copy()
+                first_valid_values = sampled_values.copy()
 
             u_profile[eta_index] = sampled_values["u"]
             v_profile[eta_index] = sampled_values["v"]
@@ -961,6 +1328,15 @@ def sample_profiles(
             t_profile[eta_index] = sampled_values["t"]
             p_profile[eta_index] = sampled_values["p"]
             rho_profile[eta_index] = sampled_values["rho"]
+
+        # fill in the wall boundary gap with the first valid values
+        for eta_index in range(first_valid_idx):
+            u_profile[eta_index] = first_valid_values["u"]
+            v_profile[eta_index] = first_valid_values["v"]
+            w_profile[eta_index] = first_valid_values["w"]
+            t_profile[eta_index] = first_valid_values["t"]
+            p_profile[eta_index] = first_valid_values["p"]
+            rho_profile[eta_index] = first_valid_values["rho"]
 
         # enforce no-slip wall boundary condition at eta = 0
         u_profile[0] = 0.0
@@ -971,7 +1347,10 @@ def sample_profiles(
         if n_eta > 1:
             t_profile[0] = t_profile[1]
             p_profile[0] = p_profile[1]
-            rho_profile[0] = p_profile[0] / (GAS_CONSTANT * t_profile[0])
+            if t_profile[0] > 0:
+                rho_profile[0] = p_profile[0] / (GAS_CONSTANT * t_profile[0])
+            else:
+                rho_profile[0] = rho_profile[1]
 
         # store station results into the output arrays
         sample_x_all[station_index, :] = sample_x

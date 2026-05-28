@@ -187,7 +187,8 @@ def cmd_extract(
         typer.echo(f"reading {resolved_input}")
         dataset = read_fequad_block_tecplot(resolved_input)
 
-        typer.echo(f"dataset: {dataset.nodal['x'].size} nodes, {dataset.cell.shape[0]} cells")
+        n_cells = dataset.connectivity.shape[0]
+        typer.echo(f"dataset: {dataset.nodal['x'].size} nodes, {n_cells} cells")
 
         nodal_x = dataset.nodal["x"]
         nodal_y = dataset.nodal["y"]
@@ -207,10 +208,12 @@ def cmd_extract(
         typer.echo("building mesh sampler (this may take a moment on large meshes)")
 
         # debug output for devs
-        logger.debug("building mesh sampler with %d nodes and %d cells", nodal_x.size, dataset.cell.shape[0])
+        n_cells = dataset.connectivity.shape[0]
+        logger.debug("building mesh sampler with %d nodes and %d cells", nodal_x.size, n_cells)
 
         mesh_sampler = build_quad_mesh_sampler(
-            nodal_x, nodal_y, dataset.connectivity, dataset.cell
+            nodal_x, nodal_y, dataset.connectivity, dataset.cell,
+            existing_nodal_fields=dataset.nodal,
         )
 
         # write the extracted wall curve diagnostic

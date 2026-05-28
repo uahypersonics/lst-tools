@@ -202,7 +202,8 @@ def _setup_single_case(
         cfg=cfg_spectra, out_path=input_path
     )
 
-    hpc_cfg = hpc_configure(cfg, set_defaults=False)
+    # spectra cases are single-point solves: 1 node, 1 MPI rank
+    hpc_cfg = hpc_configure(cfg, set_defaults=False, nodes_override=1, ntasks_per_node_override=1)
 
     if lst_exe is None:
         lst_exe = "lst.x"
@@ -305,8 +306,9 @@ def spectra_setup(
                         cfg, cfg_spectra, case_dir, input_path, baseflow_input
                     )
                     generated_files.append(written)
-                except (OSError, ValueError, KeyError) as e:
+                except Exception as e:
                     logger.error("failed to set up %s: %s", case_name, e)
+                    logger.debug("case setup traceback", exc_info=True)
                     continue
 
     # --------------------------------------------------

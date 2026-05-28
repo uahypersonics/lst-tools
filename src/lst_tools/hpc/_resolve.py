@@ -115,6 +115,7 @@ def resolve(
     *,
     set_defaults: bool = False,
     nodes_override: int | None = None,
+    ntasks_per_node_override: int | None = None,
     time_override: float | str | None = None,
 ) -> ResolvedJob:
     """Build a frozen :class:`ResolvedJob` from *env* and user settings.
@@ -140,7 +141,11 @@ def resolve(
     launcher = env.launcher
 
     # cpus per node
-    ntasks_per_node = env.cpus_per_node or 1
+    ntasks_per_node = (
+        ntasks_per_node_override
+        if ntasks_per_node_override is not None
+        else env.cpus_per_node or 1
+    )
 
     # nodes
     nodes: int | None = nodes_override if nodes_override is not None else u.get("nodes")

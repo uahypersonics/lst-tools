@@ -31,6 +31,7 @@ def hpc_configure(
     set_defaults: bool = False,
     *,
     nodes_override: int | None = None,
+    ntasks_per_node_override: int | None = None,
     time_override: float | str | None = None,
 ) -> ResolvedJob:
     """Detect environment and build a :class:`ResolvedJob`.
@@ -41,7 +42,7 @@ def hpc_configure(
         Full application config (``Config`` dataclass *or* plain dict).
     set_defaults:
         Apply generous defaults (``nodes=10``, ``time=1.0``).
-    nodes_override, time_override:
+    nodes_override, ntasks_per_node_override, time_override:
         Programmatic overrides — used by callers like *tracking_setup*
         that compute optimal values before building the script.
     """
@@ -58,5 +59,6 @@ def hpc_configure(
         user_hpc,
         set_defaults=set_defaults,
         nodes_override=nodes_override,
+        ntasks_per_node_override=ntasks_per_node_override,
         time_override=time_override,
     )
