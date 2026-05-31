@@ -126,6 +126,7 @@ def tracking_process(
                     interpolate=use_interpolate,
                     gate_tol=gate_tol,
                     min_valid=min_valid,
+                    mode_root_dir=work_dir,
                 )
                 total_files += len(written)
         else:
@@ -140,6 +141,7 @@ def tracking_process(
                         interpolate=use_interpolate,
                         gate_tol=gate_tol,
                         min_valid=min_valid,
+                        mode_root_dir=work_dir,
                     )
                     total_files += len(written)
                     advance()

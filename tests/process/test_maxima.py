@@ -136,6 +136,45 @@ def test_write_ridge_files_interpolates_fractional_rows(tmp_path: Path, monkeypa
     assert np.allclose(captured["data"]["b"], np.array([150.0, 301.0]))
 
 
+def test_write_ridge_files_groups_outputs_by_mode(tmp_path: Path, monkeypatch) -> None:
+    """Write grouped mode outputs into folders rooted at mode_root_dir."""
+    data_2d = np.array(
+        [
+            [[10.0, 100.0]],
+            [[20.0, 200.0]],
+            [[30.0, 300.0]],
+        ]
+    )
+    ridges = [maxima.Ridge(indices=[(0, 1)])]
+    kc_dir = tmp_path / "kc_0000pt00"
+
+    captured = {}
+
+    def _fake_write(path: Path, data: dict[str, np.ndarray], title: str, zone: str) -> None:
+        captured["path"] = path
+        captured["title"] = title
+        captured["zone"] = zone
+        captured["data"] = data
+
+    monkeypatch.setattr(maxima, "write_tecplot_ascii", _fake_write)
+
+    out = maxima._write_ridge_files(
+        ridges=ridges,
+        data_2d=data_2d,
+        prefix="alpi_max_mode",
+        variables=["a", "b"],
+        dir_name=kc_dir,
+        min_valid=1,
+        mode_root_dir=tmp_path,
+    )
+
+    assert len(out) == 1
+    assert out[0] == tmp_path / "alpi_max_mode_001" / "kc_0000pt00.dat"
+    assert captured["path"] == tmp_path / "alpi_max_mode_001" / "kc_0000pt00.dat"
+    assert captured["title"] == "alpi_max_mode_001_kc_0000pt00"
+    assert captured["zone"] == "alpi_max_mode_001_kc_0000pt00"
+
+
 def test_extract_maxima_missing_solution_returns_empty(tmp_path: Path) -> None:
     """Return empty list when solution file does not exist."""
     out = maxima.extract_maxima(tmp_path)
@@ -160,7 +199,7 @@ def test_extract_maxima_runs_two_ridge_passes(tmp_path: Path, monkeypatch) -> No
 
     write_calls = []
 
-    def _fake_write_files(ridges, data_2d, prefix, variables, dir_name, min_valid):
+    def _fake_write_files(ridges, data_2d, prefix, variables, dir_name, min_valid, mode_root_dir=None):
         write_calls.append(prefix)
         return [dir_name / f"{prefix}_001.dat"]
 

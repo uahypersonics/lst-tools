@@ -283,6 +283,7 @@ def extract_maxima(
     gate_tol: float = _DEFAULT_GATE_TOL,
     min_valid: int = _MIN_VALID_POINTS,
     interpolate: bool = False,
+    mode_root_dir: str | Path | None = None,
 ) -> list[Path]:
     """Extract ridge-line maxima from a single tracking case directory.
 
@@ -295,6 +296,8 @@ def extract_maxima(
         fname: name of the solution file to read.
         gate_tol: relative frequency gate for ridge matching.
         min_valid: minimum number of valid stations for a mode to be kept.
+        mode_root_dir: optional parent directory used to group outputs into
+            per-mode folders. When omitted, writes flat files inside dir_name.
 
     Returns:
         List of paths to the written output files.
@@ -305,6 +308,10 @@ def extract_maxima(
 
     # ensure dir_name is a Path object
     dir_name = Path(dir_name)
+
+    # convert optional mode root to Path
+    if mode_root_dir is not None:
+        mode_root_dir = Path(mode_root_dir)
 
     # assemble full path to the solution file
     fpath = dir_name / fname
@@ -347,6 +354,7 @@ def extract_maxima(
         variables=tp.variables,
         dir_name=dir_name,
         min_valid=min_valid,
+        mode_root_dir=mode_root_dir,
     )
     written_files.extend(alpi_files)
 
@@ -366,6 +374,7 @@ def extract_maxima(
         variables=tp.variables,
         dir_name=dir_name,
         min_valid=min_valid,
+        mode_root_dir=mode_root_dir,
     )
 
     written_files.extend(nfac_files)
@@ -388,6 +397,7 @@ def _write_ridge_files(
     variables: list[str],
     dir_name: Path,
     min_valid: int,
+    mode_root_dir: Path | None = None,
 ) -> list[Path]:
     """Write one Tecplot file per valid ridge.
 
@@ -401,6 +411,8 @@ def _write_ridge_files(
         variables: list of variable names from the source file.
         dir_name: directory to write output files.
         min_valid: minimum number of valid points to keep a mode.
+        mode_root_dir: optional parent directory used to group outputs into
+            per-mode folders. When omitted, writes flat files inside dir_name.
 
     Returns:
         List of paths to written files.
@@ -440,15 +452,22 @@ def _write_ridge_files(
             for col, name in enumerate(variables)
         }
 
-        # write file
-        fname = f"{prefix}_{mode_str}.dat"
-        fpath = dir_name / fname
+        # build output path
+        if mode_root_dir is None:
+            fname = f"{prefix}_{mode_str}.dat"
+            fpath = dir_name / fname
+        else:
+            mode_dir = mode_root_dir / f"{prefix}_{mode_str}"
+            mode_dir.mkdir(parents=True, exist_ok=True)
+            fname = f"{dir_name.name}.dat"
+            fpath = mode_dir / fname
 
+        # write file
         write_tecplot_ascii(
             fpath,
             var_dict,
-            title=f"{prefix}_{mode_str}",
-            zone=f"{prefix}_{mode_str}",
+            title=f"{prefix}_{mode_str}_{dir_name.name}",
+            zone=f"{prefix}_{mode_str}_{dir_name.name}",
         )
 
         logger.info("wrote %s (%d points)", fname, len(rows))

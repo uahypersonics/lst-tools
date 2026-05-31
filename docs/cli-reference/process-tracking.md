@@ -19,6 +19,11 @@ CLI flags override those defaults for the current invocation.
 When `--dir` is provided, volume assembly is disabled automatically because
 volume output requires the full set of tracking slices.
 
+Maxima outputs are grouped in the directory where you run the command. Each
+detected mode gets its own folder, such as `alpi_max_mode_001/` or
+`nfac_max_mode_001/`, and each processed `kc_*` case writes its extracted ridge
+file into the matching mode folder.
+
 ```bash
 lst-tools process tracking
 

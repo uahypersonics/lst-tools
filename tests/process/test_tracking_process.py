@@ -30,10 +30,17 @@ def test_tracking_process_runs_maxima_and_volume_with_config_defaults(
     cfg.processing.tracking.gate_tol = 0.25
     cfg.processing.tracking.min_valid = 12
 
-    maxima_calls: list[tuple[Path, bool, float, int]] = []
+    maxima_calls: list[tuple[Path, bool, float, int, Path | None]] = []
 
-    def _fake_extract_maxima(kc_dir: Path, *, interpolate: bool, gate_tol: float, min_valid: int):
-        maxima_calls.append((kc_dir, interpolate, gate_tol, min_valid))
+    def _fake_extract_maxima(
+        kc_dir: Path,
+        *,
+        interpolate: bool,
+        gate_tol: float,
+        min_valid: int,
+        mode_root_dir: Path | None = None,
+    ):
+        maxima_calls.append((kc_dir, interpolate, gate_tol, min_valid, mode_root_dir))
         return [kc_dir / "alpi_max_mode_001.dat"]
 
     monkeypatch.setattr("lst_tools.process.tracking.extract_maxima", _fake_extract_maxima)
@@ -48,8 +55,8 @@ def test_tracking_process_runs_maxima_and_volume_with_config_defaults(
     # validate
     assert out == tmp_path
     assert len(maxima_calls) == 2
-    assert maxima_calls[0][1:] == (True, 0.25, 12)
-    assert maxima_calls[1][1:] == (True, 0.25, 12)
+    assert maxima_calls[0][1:] == (True, 0.25, 12, tmp_path)
+    assert maxima_calls[1][1:] == (True, 0.25, 12, tmp_path)
 
 
 def test_tracking_process_interpolate_override_and_volume_no_output(
@@ -68,10 +75,18 @@ def test_tracking_process_interpolate_override_and_volume_no_output(
 
     captured: dict[str, object] = {}
 
-    def _fake_extract_maxima(kc_dir: Path, *, interpolate: bool, gate_tol: float, min_valid: int):
+    def _fake_extract_maxima(
+        kc_dir: Path,
+        *,
+        interpolate: bool,
+        gate_tol: float,
+        min_valid: int,
+        mode_root_dir: Path | None = None,
+    ):
         captured["interpolate"] = interpolate
         captured["gate_tol"] = gate_tol
         captured["min_valid"] = min_valid
+        captured["mode_root_dir"] = mode_root_dir
         return []
 
     monkeypatch.setattr("lst_tools.process.tracking.extract_maxima", _fake_extract_maxima)
@@ -94,6 +109,7 @@ def test_tracking_process_interpolate_override_and_volume_no_output(
         "interpolate": False,
         "gate_tol": 0.11,
         "min_valid": 7,
+        "mode_root_dir": tmp_path,
     }
 
 
