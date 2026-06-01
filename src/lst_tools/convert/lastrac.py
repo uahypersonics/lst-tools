@@ -33,6 +33,153 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------
+# helper functions for LASTRAC normalization
+# --------------------------------------------------
+def _infer_unit_reynolds(
+    flow_attrs: dict[str, float],
+    cfg: Config,
+    dens_inf: float,
+    uvel_inf: float,
+) -> float:
+    """Return the freestream unit Reynolds number in 1/m.
+
+    Args:
+        flow_attrs: Root-level HDF5 attributes.
+        cfg: Parsed lst-tools configuration.
+        dens_inf: Freestream density.
+        uvel_inf: Freestream velocity.
+
+    Returns:
+        Unit Reynolds number.
+
+    Raises:
+        ValueError: If the unit Reynolds number cannot be inferred.
+    """
+
+    # check config first
+    config_re1 = cfg.flow_conditions.re1
+    if config_re1 is not None:
+        return float(config_re1)
+
+    # check whether the extractor stored a freestream viscosity attribute
+    mu_inf_attr = flow_attrs.get("freestream viscosity")
+    if mu_inf_attr is None:
+        raise ValueError(
+            "flow_conditions.re1 is missing and HDF5 attribute 'freestream viscosity' "
+            "is not available to infer the LASTRAC unit Reynolds number"
+        )
+
+    mu_inf = float(mu_inf_attr)
+    if mu_inf <= 0.0:
+        raise ValueError(
+            f"freestream viscosity must be positive to infer re1, got {mu_inf:.6e}"
+        )
+
+    inferred_re1 = dens_inf * uvel_inf / mu_inf
+
+    logger.info("re1 missing in config -> using HDF5 freestream viscosity to infer re1 %.6e", inferred_re1)
+
+    return float(inferred_re1)
+
+
+def _compute_station_reference_length(
+    s_value: float,
+    unit_reynolds: float,
+    fallback_lref: float | None,
+) -> float:
+    """Compute the local LASTRAC reference length for one station.
+
+    Args:
+        s_value: Dimensional streamwise station coordinate.
+        unit_reynolds: Freestream unit Reynolds number.
+        fallback_lref: Optional fallback reference length from config.
+
+    Returns:
+        Local reference length used to normalize eta.
+
+    Raises:
+        ValueError: If no positive reference length can be produced.
+    """
+
+    # compute the local viscous length from the streamwise station coordinate
+    if s_value > 0.0:
+        local_lref = np.sqrt(s_value / unit_reynolds)
+        return float(local_lref)
+
+    # fall back to the user-provided reference length only for degenerate s=0 stations
+    if fallback_lref is not None and fallback_lref > 0.0:
+        logger.warning(
+            "station s <= 0 encountered (s=%.6e) -> falling back to geometry.l_ref %.6e",
+            s_value,
+            fallback_lref,
+        )
+        return float(fallback_lref)
+
+    raise ValueError(
+        "cannot compute LASTRAC local reference length for station with non-positive "
+        f"s={s_value:.6e}; provide geometry.l_ref or skip this station"
+    )
+
+
+def _extract_station_edge_scales(
+    flow: Flow,
+    urot: np.ndarray,
+    i_loc: int,
+    *,
+    rgas: float,
+) -> tuple[float, float, float]:
+    """Return station-local edge scales for LASTRAC normalization.
+
+    Args:
+        flow: Flow-field container.
+        urot: Tangential velocity array after optional rotation.
+        i_loc: Streamwise station index.
+        rgas: Gas constant used for density fallback.
+
+    Returns:
+        Tuple of ``(t_edge, u_edge, rho_edge)``.
+
+    Raises:
+        ValueError: If any required local scale is not positive.
+    """
+
+    # read full station profiles so the edge scale can fall back to the last valid sample
+    temp_profile = np.asarray(flow.field("temp")[:, i_loc], dtype=float)
+    uvel_profile = np.abs(np.asarray(urot[:, i_loc], dtype=float))
+
+    # read local edge density directly when available
+    try:
+        dens_profile = np.asarray(flow.field("dens")[:, i_loc], dtype=float)
+    except KeyError:
+        pres_profile = np.asarray(flow.field("pres")[:, i_loc], dtype=float)
+        dens_profile = pres_profile / (rgas * temp_profile)
+
+    # select the last usable outer-edge sample instead of assuming the final entry is valid
+    valid_mask = (temp_profile > 0.0) & (uvel_profile > 0.0) & (dens_profile > 0.0)
+    valid_indices = np.flatnonzero(valid_mask)
+
+    if valid_indices.size == 0:
+        raise ValueError(
+            "station profile does not contain any valid positive edge state for LASTRAC normalization"
+        )
+
+    edge_index = int(valid_indices[-1])
+    temp_edge = float(temp_profile[edge_index])
+    uvel_edge = float(uvel_profile[edge_index])
+    dens_edge = float(dens_profile[edge_index])
+
+    # validate the station-local scales before normalization
+    if temp_edge <= 0.0:
+        raise ValueError(f"station edge temperature must be positive, got {temp_edge:.6e}")
+    if uvel_edge <= 0.0:
+        raise ValueError(f"station edge velocity must be positive, got {uvel_edge:.6e}")
+    if dens_edge <= 0.0:
+        raise ValueError(f"station edge density must be positive, got {dens_edge:.6e}")
+
+    return temp_edge, uvel_edge, dens_edge
+
+
+# --------------------------------------------------
 # convert grid and flow (hdf5) to lastrac format
 # --------------------------------------------------
 def convert_meanflow(
@@ -284,11 +431,13 @@ def convert_meanflow(
     # --------------------------------------------------
     # validate required flow conditions before entering the write loop
     # --------------------------------------------------
+    unit_reynolds = _infer_unit_reynolds(flow_attrs, cfg, dens_inf, uvel_inf)
+
     required_flow = {
-        "re1": cfg.flow_conditions.re1,
         "temp_inf": temp_inf,
         "uvel_inf": uvel_inf,
         "dens_inf": dens_inf,
+        "re1": unit_reynolds,
     }
     missing = [k for k, v in required_flow.items() if v is None]
     if missing:
@@ -304,34 +453,55 @@ def convert_meanflow(
 
         for i_glb, i_loc in enumerate(range(i_s, i_e, d_i)):
 
+            # build the physical wall-normal coordinate before normalization
+            x_loc = grid.x[:, i_loc]
+            y_loc = grid.y[:, i_loc]
+            eta_dim = np.hypot(x_loc - x_loc[0], y_loc - y_loc[0])
+
+            # build station-local LASTRAC scales
+            s_value = float(s[i_loc])
+            local_lref = _compute_station_reference_length(
+                s_value,
+                unit_reynolds,
+                cfg.geometry.l_ref,
+            )
+            local_re1 = unit_reynolds * local_lref
+
+            temp_edge, uvel_edge, dens_edge = _extract_station_edge_scales(
+                flow,
+                urot,
+                i_loc,
+                rgas=cfg.flow_conditions.rgas,
+            )
+
+            # normalize the station vectors to LASTRAC convention
+            eta_norm = eta_dim / local_lref
+            uvel_norm = urot[:, i_loc] / uvel_edge
+            vvel_norm = vrot[:, i_loc] / uvel_edge
+
             # write station header: note i_loc+1 because lastrac starts counting at 1 (fortran indexing vs python indexing)
             w.write_station_header(
                 i_loc=i_loc + 1,
                 n_eta=grid.y.shape[0],
-                s=s[i_loc],
-                lref=cfg.geometry.l_ref,
-                re1=cfg.flow_conditions.re1,
+                s=s_value,
+                lref=local_lref,
+                re1=local_re1,
                 kappa=kappa[i_loc],
                 rloc=r[i_loc],
                 drdx=drdx[i_loc],
-                stat_temp=temp_inf,
-                stat_uvel=uvel_inf,
-                stat_dens=dens_inf,
+                stat_temp=temp_edge,
+                stat_uvel=uvel_edge,
+                stat_dens=dens_edge,
             )
 
-            # compute wall normal coordinate at i_loc and write to lastrac meanflow file
-            x_loc = grid.x[:, i_loc]
-            y_loc = grid.y[:, i_loc]
-
-            eta = np.hypot(x_loc - x_loc[0], y_loc - y_loc[0])
-
-            w.write_station_vector(eta)
+            # write normalized wall-normal coordinate
+            w.write_station_vector(eta_norm)
 
             # write streamwise velocity (rotated if surface angle is meaningful, otherwise original uvel)
-            w.write_station_vector(urot[:, i_loc])
+            w.write_station_vector(uvel_norm)
 
             # write wall-normal velocity (rotated if surface angle is meaningful, otherwise original vvel)
-            w.write_station_vector(vrot[:, i_loc])
+            w.write_station_vector(vvel_norm)
 
             # write spanwise velocity (optional) — write zeros if field missing
 
@@ -344,13 +514,14 @@ def convert_meanflow(
             else:
                 wvel_i = np.zeros(n_eta, dtype=float)
 
-            w.write_station_vector(wvel_i)
+            w.write_station_vector(wvel_i / uvel_edge)
 
             # write temperature
-            w.write_station_vector(flow.field("temp")[:, i_loc])
+            w.write_station_vector(flow.field("temp")[:, i_loc] / temp_edge)
 
             # write pressure
-            w.write_station_vector(flow.field("pres")[:, i_loc])
+            pres_scale = dens_edge * uvel_edge**2.0
+            w.write_station_vector(flow.field("pres")[:, i_loc] / pres_scale)
 
             # advance progress bar
             advance()

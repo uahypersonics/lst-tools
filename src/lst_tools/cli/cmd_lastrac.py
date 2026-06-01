@@ -50,8 +50,9 @@ def _load_with_cfd_io(fpath: Path) -> tuple[Grid, Flow, dict]:
     """Read grid/flow via cfd-io and map into lst-tools core containers.
 
     lst-tools uses (ny, nx) layout.  The data orientation is detected
-    by checking whether x[0,0] < x[0,-1] (streamwise increases along
-    axis 1).  If not, the arrays are transposed.
+    by comparing how strongly x varies along each axis.  The streamwise
+    axis should carry the larger x-span, so arrays are transposed only
+    when axis 0 looks more streamwise than axis 1.
     """
     ds = cfd_read_file(fpath)
     grid_raw = ds.grid
@@ -67,12 +68,22 @@ def _load_with_cfd_io(fpath: Path) -> tuple[Grid, Flow, dict]:
     x = _to_2d(grid_raw.x, "grid/x")
     y = _to_2d(grid_raw.y, "grid/y")
 
-    # determine orientation: in (ny, nx) convention, x[0,:] spans the
-    # streamwise direction so x[0,0] < x[0,-1].  If the opposite is
-    # true, the data is (nx, ny) and needs to be transposed.
-    do_transpose = x[0, 0] >= x[0, -1]
+    # compare the mean x-span along each axis to decide which axis is streamwise
+    axis0_x_span = float(np.mean(np.ptp(x, axis=0)))
+    axis1_x_span = float(np.mean(np.ptp(x, axis=1)))
 
-    logger.debug("%f %f -> do_transpose = %s", x[0, 0], x[0, -1], do_transpose)
+    # fall back to the wall-line monotonicity check only when both spans are essentially tied
+    if np.isclose(axis0_x_span, axis1_x_span):
+        do_transpose = x[0, 0] > x[0, -1]
+    else:
+        do_transpose = axis0_x_span > axis1_x_span
+
+    logger.debug(
+        "axis0_x_span=%f axis1_x_span=%f -> do_transpose = %s",
+        axis0_x_span,
+        axis1_x_span,
+        do_transpose,
+    )
 
     if do_transpose:
         logger.debug("transposing arrays from (nx, ny) to (ny, nx)")
