@@ -51,9 +51,9 @@ def test_to_2d_rejects_non_singleton_3d() -> None:
 
 
 def test_load_with_cfd_io_transposes_when_needed(monkeypatch) -> None:
-    """Transpose arrays when streamwise direction is not along axis 1."""
-    x = np.array([[3.0, 2.0], [3.0, 2.0]])
-    y = np.array([[0.0, 0.0], [1.0, 1.0]])
+    """Transpose arrays when the larger x-span is along axis 0."""
+    x = np.array([[3.0, 3.0], [2.0, 2.0]])
+    y = np.array([[0.0, 1.0], [0.0, 1.0]])
     z = np.ones_like(x)
 
     grid = _FakeStructuredGrid(x=x, y=y, z=z)

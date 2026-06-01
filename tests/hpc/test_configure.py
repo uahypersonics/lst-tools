@@ -38,6 +38,7 @@ def test_hpc_configure_with_dict_cfg(mock_detect, mock_resolve):
         {"nodes": 2, "time": 2.0},
         set_defaults=True,
         nodes_override=3,
+        ntasks_per_node_override=None,
         time_override=4.0,
     )
 

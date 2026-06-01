@@ -167,7 +167,7 @@ def test_setup_single_case_skips_hpc_script_for_unknown_scheduler(
     monkeypatch.setattr(
         spectra_setup_mod,
         "hpc_configure",
-        lambda cfg_arg, set_defaults=False: SimpleNamespace(scheduler="unknown"),
+        lambda cfg_arg, set_defaults=False, **kwargs: SimpleNamespace(scheduler="unknown"),
     )
 
     script_mock = []
@@ -211,7 +211,7 @@ def test_setup_single_case_builds_hpc_script_with_default_executable(
     monkeypatch.setattr(
         spectra_setup_mod,
         "hpc_configure",
-        lambda cfg_arg, set_defaults=False: hpc_cfg,
+        lambda cfg_arg, set_defaults=False, **kwargs: hpc_cfg,
     )
 
     script_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
@@ -259,7 +259,7 @@ def test_setup_single_case_uses_configured_executable_when_present(
     monkeypatch.setattr(
         spectra_setup_mod,
         "hpc_configure",
-        lambda cfg_arg, set_defaults=False: hpc_cfg,
+        lambda cfg_arg, set_defaults=False, **kwargs: hpc_cfg,
     )
 
     script_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []

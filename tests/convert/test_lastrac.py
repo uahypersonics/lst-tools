@@ -365,20 +365,20 @@ class TestConvertMeanflow:
         assert result == Path("test.bin")
         # Should only process 1 station (index 1) with stride 2
         assert mock_writer.write_station_header.call_count == 1
-        # Check that station header was called with correct i_loc (fortran indexing: i_loc+1)
-        mock_writer.write_station_header.assert_called_with(
-            i_loc=2,  # Fortran index = Python index + 1
-            n_eta=2,
-            s=1.0,
-            lref=1.0,
-            re1=1e6,
-            kappa=0.0,
-            rloc=0.0,
-            drdx=0.0,
-            stat_temp=300.0,
-            stat_uvel=100.0,
-            stat_dens=1.225,
-        )
+        # Check that station header carries the local LASTRAC scales
+        _, kwargs = mock_writer.write_station_header.call_args
+        assert kwargs["i_loc"] == 2  # Fortran index = Python index + 1
+        assert kwargs["n_eta"] == 2
+        assert kwargs["s"] == pytest.approx(1.0)
+        assert kwargs["lref"] == pytest.approx(1.0e-3)
+        assert kwargs["re1"] == pytest.approx(1.0e3)
+        assert kwargs["kappa"] == pytest.approx(0.0)
+        assert kwargs["rloc"] == pytest.approx(0.0)
+        assert kwargs["drdx"] == pytest.approx(0.0)
+        assert kwargs["stat_temp"] == pytest.approx(300.0)
+        assert kwargs["stat_uvel"] == pytest.approx(1.0)
+        expected_rho_edge = 101325.0 / (base_config.flow_conditions.rgas * 300.0)
+        assert kwargs["stat_dens"] == pytest.approx(expected_rho_edge)
 
     @patch("lst_tools.convert.lastrac.LastracWriter")
     @patch("lst_tools.convert.lastrac.radius")
