@@ -252,13 +252,43 @@ def convert_meanflow(
     n_eta = grid.y.shape[0]
 
     # --------------------------------------------------
+    # infer missing freestream fields from HDF5 attrs or edge-state values
+    # --------------------------------------------------
+    flow_attrs = dict(getattr(flow, "attrs", {}) or {})
+
+    temp_inf = cfg.flow_conditions.temp_inf
+    if temp_inf is None:
+        temp_attr = flow_attrs.get("static temperature")
+        if temp_attr is not None:
+            temp_inf = float(temp_attr)
+            logger.info("temp_inf missing in config -> using HDF5 static temperature %.6e", temp_inf)
+        else:
+            temp_inf = float(np.mean(flow.field("temp")[-1, :]))
+            logger.info("temp_inf missing in config -> using edge mean temp %.6e", temp_inf)
+
+    uvel_inf = cfg.flow_conditions.uvel_inf
+    if uvel_inf is None:
+        uvel_inf = float(np.mean(flow.field("uvel")[-1, :]))
+        logger.info("uvel_inf missing in config -> using edge mean uvel %.6e", uvel_inf)
+
+    dens_inf = cfg.flow_conditions.dens_inf
+    if dens_inf is None:
+        dens_attr = flow_attrs.get("static density")
+        if dens_attr is not None:
+            dens_inf = float(dens_attr)
+            logger.info("dens_inf missing in config -> using HDF5 static density %.6e", dens_inf)
+        else:
+            dens_inf = float(np.mean(flow.field("dens")[-1, :]))
+            logger.info("dens_inf missing in config -> using edge mean dens %.6e", dens_inf)
+
+    # --------------------------------------------------
     # validate required flow conditions before entering the write loop
     # --------------------------------------------------
     required_flow = {
         "re1": cfg.flow_conditions.re1,
-        "temp_inf": cfg.flow_conditions.temp_inf,
-        "uvel_inf": cfg.flow_conditions.uvel_inf,
-        "dens_inf": cfg.flow_conditions.dens_inf,
+        "temp_inf": temp_inf,
+        "uvel_inf": uvel_inf,
+        "dens_inf": dens_inf,
     }
     missing = [k for k, v in required_flow.items() if v is None]
     if missing:
@@ -284,9 +314,9 @@ def convert_meanflow(
                 kappa=kappa[i_loc],
                 rloc=r[i_loc],
                 drdx=drdx[i_loc],
-                stat_temp=cfg.flow_conditions.temp_inf,
-                stat_uvel=cfg.flow_conditions.uvel_inf,
-                stat_dens=cfg.flow_conditions.dens_inf,
+                stat_temp=temp_inf,
+                stat_uvel=uvel_inf,
+                stat_dens=dens_inf,
             )
 
             # compute wall normal coordinate at i_loc and write to lastrac meanflow file

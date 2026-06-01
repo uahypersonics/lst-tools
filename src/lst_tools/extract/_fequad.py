@@ -39,6 +39,9 @@ SUTHERLAND_S = 110.4
 # wall-normal grid size
 N_ETA = 200
 
+# boundary-velocity quantile used to isolate the low-speed wall segment
+WALL_VELOCITY_QUANTILE = 0.25
+
 # flow field names expected in the dataset (internal canonical names)
 REQUIRED_FIELDS = ("u", "v", "w", "t", "p", "rho")
 
@@ -352,6 +355,7 @@ def extract_lower_wall(
     nodal_x: np.ndarray,
     nodal_y: np.ndarray,
     connectivity: np.ndarray,
+    nodal_fields: dict[str, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Extract the body-surface wall from the boundary loop.
 
@@ -361,17 +365,26 @@ def extract_lower_wall(
         nodal_x: Node x-coordinates.
         nodal_y: Node y-coordinates.
         connectivity: FE quadrilateral connectivity (1-based).
+        nodal_fields: Optional canonical nodal flow fields. When ``u``/``v``/``w``
+            are available, the wall can be identified from the lowest-velocity
+            boundary segment instead of only from geometry.
 
     Returns:
         Wall x and y arrays in loop order (arc from trailing edge to trailing edge).
     """
-    return extract_body_wall(nodal_x, nodal_y, connectivity)
+    return extract_body_wall(
+        nodal_x,
+        nodal_y,
+        connectivity,
+        nodal_fields=nodal_fields,
+    )
 
 
 def extract_body_wall(
     nodal_x: np.ndarray,
     nodal_y: np.ndarray,
     connectivity: np.ndarray,
+    nodal_fields: dict[str, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Extract the body-surface arc from the boundary loop.
 
@@ -393,6 +406,8 @@ def extract_body_wall(
         nodal_x: Node x-coordinates.
         nodal_y: Node y-coordinates.
         connectivity: FE quadrilateral connectivity (1-based).
+        nodal_fields: Optional canonical nodal flow fields used for a low-speed
+            boundary-wall classifier when available.
 
     Returns:
         Wall x and y arrays in loop order (arc from trailing edge through nose
@@ -400,7 +415,12 @@ def extract_body_wall(
     """
 
     try:
-        wall_x, wall_y = _extract_body_surface_arc(nodal_x, nodal_y, connectivity)
+        wall_x, wall_y = _extract_body_surface_arc(
+            nodal_x,
+            nodal_y,
+            connectivity,
+            nodal_fields=nodal_fields,
+        )
         if wall_x.size > 10:
             return wall_x, wall_y
         logger.debug("body-surface arc found only %d points, falling back", wall_x.size)
@@ -415,6 +435,7 @@ def _extract_body_surface_arc(
     nodal_x: np.ndarray,
     nodal_y: np.ndarray,
     connectivity: np.ndarray,
+    nodal_fields: dict[str, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Extract the body-surface arc as the longest |y|<tol sub-chain.
 
@@ -422,6 +443,8 @@ def _extract_body_surface_arc(
         nodal_x: Node x-coordinates.
         nodal_y: Node y-coordinates.
         connectivity: FE quadrilateral connectivity (1-based).
+        nodal_fields: Optional canonical nodal flow fields used for a low-speed
+            boundary-wall classifier when available.
 
     Returns:
         Wall x and y arrays in loop order (NOT sorted by x).
@@ -435,17 +458,28 @@ def _extract_body_surface_arc(
     boundary_loop = order_boundary_loop(boundary_edges)
 
     # walk the full loop to get ordered node list
-    start_node = next(iter(boundary_loop.keys()))
-    ordered_nodes = [start_node]
-    prev_node = start_node
-    curr_node = boundary_loop[start_node][0]
+    ordered_nodes = _walk_boundary_loop(boundary_loop)
 
-    while curr_node != start_node:
-        ordered_nodes.append(curr_node)
-        neighbor_a, neighbor_b = boundary_loop[curr_node]
-        next_node = neighbor_b if neighbor_a == prev_node else neighbor_a
-        prev_node = curr_node
-        curr_node = next_node
+    # check for a low-velocity wall segment first when reconstructed wall values exist
+    if nodal_fields is not None and all(
+        field_name in nodal_fields for field_name in ("u", "v", "w")
+    ):
+        try:
+            wall_x, wall_y = _extract_velocity_wall_segment(
+                ordered_nodes,
+                nodal_x,
+                nodal_y,
+                nodal_fields,
+            )
+            if wall_x.size > 10:
+                return wall_x, wall_y
+
+            logger.debug(
+                "velocity-based wall segment found only %d points, falling back to geometry",
+                wall_x.size,
+            )
+        except ValueError as e:
+            logger.debug("velocity-based wall classification failed: %s", e)
 
     # define body-surface tolerance: 5% of y-range
     y_min = nodal_y.min()
@@ -459,24 +493,7 @@ def _extract_body_surface_arc(
     is_body = [abs(nodal_y[node - 1]) < tol for node in ordered_nodes]
 
     # find contiguous sub-chains of body-surface nodes
-    segments: list[list[int]] = []
-    current_segment: list[int] = []
-
-    for i, node in enumerate(ordered_nodes):
-        if is_body[i]:
-            current_segment.append(node)
-        else:
-            if current_segment:
-                segments.append(current_segment)
-                current_segment = []
-
-    if current_segment:
-        segments.append(current_segment)
-
-    # handle wrap-around: if first and last segments are both body-surface, merge them
-    if len(segments) >= 2 and is_body[0] and is_body[-1]:
-        segments[0] = segments[-1] + segments[0]
-        segments.pop()
+    segments = _collect_boundary_segments(ordered_nodes, is_body)
 
     if not segments:
         raise ValueError("No body-surface boundary segment found")
@@ -494,6 +511,98 @@ def _extract_body_surface_arc(
 
     logger.debug("body-surface arc: %d points, x in [%.4e, %.4e], y in [%.4e, %.4e]",
                  wall_x.size, wall_x.min(), wall_x.max(), wall_y.min(), wall_y.max())
+
+    return wall_x, wall_y
+
+
+def _walk_boundary_loop(
+    boundary_loop: dict[int, tuple[int, int]],
+) -> list[int]:
+    """Walk a closed boundary loop and return node IDs in loop order."""
+
+    start_node = next(iter(boundary_loop.keys()))
+    ordered_nodes = [start_node]
+    prev_node = start_node
+    curr_node = boundary_loop[start_node][0]
+
+    while curr_node != start_node:
+        ordered_nodes.append(curr_node)
+        neighbor_a, neighbor_b = boundary_loop[curr_node]
+        next_node = neighbor_b if neighbor_a == prev_node else neighbor_a
+        prev_node = curr_node
+        curr_node = next_node
+
+    return ordered_nodes
+
+
+def _collect_boundary_segments(
+    ordered_nodes: list[int],
+    mask: list[bool] | np.ndarray,
+) -> list[list[int]]:
+    """Collect contiguous selected segments on a circular boundary loop."""
+
+    segments: list[list[int]] = []
+    current_segment: list[int] = []
+
+    for index, node_id in enumerate(ordered_nodes):
+        if mask[index]:
+            current_segment.append(node_id)
+        else:
+            if current_segment:
+                segments.append(current_segment)
+                current_segment = []
+
+    if current_segment:
+        segments.append(current_segment)
+
+    if len(segments) >= 2 and mask[0] and mask[-1]:
+        segments[0] = segments[-1] + segments[0]
+        segments.pop()
+
+    return segments
+
+
+def _extract_velocity_wall_segment(
+    ordered_nodes: list[int],
+    nodal_x: np.ndarray,
+    nodal_y: np.ndarray,
+    nodal_fields: dict[str, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Extract the longest low-velocity segment from the boundary loop."""
+
+    # build a boundary speed proxy from the reconstructed nodal velocity field
+    boundary_indices = np.asarray(ordered_nodes, dtype=int) - 1
+    boundary_speed = (
+        np.abs(nodal_fields["u"][boundary_indices])
+        + np.abs(nodal_fields["v"][boundary_indices])
+        + np.abs(nodal_fields["w"][boundary_indices])
+    )
+
+    # reconstructed nodal wall values are not exactly zero, so use the lowest
+    # boundary-velocity band rather than an exact no-slip equality test.
+    tol_vel = float(np.quantile(boundary_speed, WALL_VELOCITY_QUANTILE))
+    min_speed = float(boundary_speed.min())
+    tol_vel = max(tol_vel, min_speed * (1.0 + 1.0e-6))
+
+    is_body = (boundary_speed <= tol_vel).tolist()
+    segments = _collect_boundary_segments(ordered_nodes, is_body)
+    if not segments:
+        raise ValueError("No low-velocity boundary segment found")
+
+    longest_segment = max(segments, key=len)
+    wall_nodes = np.asarray(longest_segment, dtype=int)
+    wall_x = nodal_x[wall_nodes - 1]
+    wall_y = nodal_y[wall_nodes - 1]
+
+    logger.debug(
+        "velocity wall arc: %d points, tol_vel=%.4e, x in [%.4e, %.4e], y in [%.4e, %.4e]",
+        wall_x.size,
+        tol_vel,
+        wall_x.min(),
+        wall_x.max(),
+        wall_y.min(),
+        wall_y.max(),
+    )
 
     return wall_x, wall_y
 

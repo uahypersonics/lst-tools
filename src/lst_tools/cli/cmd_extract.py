@@ -193,17 +193,6 @@ def cmd_extract(
         nodal_x = dataset.nodal["x"]
         nodal_y = dataset.nodal["y"]
 
-        # extract the lower wall boundary
-        wall_x, wall_y = extract_lower_wall(nodal_x, nodal_y, dataset.connectivity)
-
-        # debug output 
-        logger.debug(
-            "lower wall: %d points, x in [%.4e, %.4e]",
-            wall_x.size,
-            float(wall_x[0]),
-            float(wall_x[-1]),
-        )
-
         # build the quad mesh sampler (nodal reconstruction + spatial index)
         typer.echo("building mesh sampler (this may take a moment on large meshes)")
 
@@ -214,6 +203,22 @@ def cmd_extract(
         mesh_sampler = build_quad_mesh_sampler(
             nodal_x, nodal_y, dataset.connectivity, dataset.cell,
             existing_nodal_fields=dataset.nodal,
+        )
+
+        # extract the lower/body wall boundary
+        wall_x, wall_y = extract_lower_wall(
+            nodal_x,
+            nodal_y,
+            dataset.connectivity,
+            nodal_fields=mesh_sampler.nodal_fields,
+        )
+
+        # debug output
+        logger.debug(
+            "lower wall: %d points, x in [%.4e, %.4e]",
+            wall_x.size,
+            float(wall_x[0]),
+            float(wall_x[-1]),
         )
 
         # write the extracted wall curve diagnostic

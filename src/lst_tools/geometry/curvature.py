@@ -60,6 +60,37 @@ def curvature(
     x = np.asarray(grid.x[j, :], dtype=float)
     y = np.asarray(grid.y[j, :], dtype=float)
 
+    # check whether there are enough streamwise stations for a second derivative
+    n_station = x.size
+    if n_station < 3:
+        # debug output for devs
+        logger.debug(
+            "curvature requires at least 3 stations for a second-order stencil; got %d -> return zero curvature",
+            n_station,
+        )
+
+        # build a zero-curvature fallback for short synthetic/profile-only inputs
+        kappa = np.zeros_like(x, dtype=float)
+
+        # write debug output if requested
+        if debug_path is not None:
+
+            # normalize to a Path and ensure directory exists
+            dbg_dir = Path(debug_path)
+            dbg_dir.mkdir(parents=True, exist_ok=True)
+
+            # write tecplot readable ascii file
+            from lst_tools.data_io.tecplot_ascii import write_tecplot_ascii
+
+            write_tecplot_ascii(
+                dbg_dir / "curvature.dat",
+                {"x": x, "y": y, "yp": np.zeros_like(x), "ypp": np.zeros_like(x), "kappa": kappa, "kappa_smoothed": kappa},
+                title="curvature debug",
+                zone="row_j",
+            )
+
+        return kappa
+
     # compute first and second derivatives of y with respect to x (handles nonuniform x)
     yp = np.gradient(y, x, edge_order=2)
     ypp = np.gradient(yp, x, edge_order=2)
