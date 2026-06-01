@@ -39,6 +39,9 @@ SUTHERLAND_S = 110.4
 # wall-normal grid size
 N_ETA = 200
 
+# default wall-normal point distribution
+DEFAULT_ETA_DISTRIBUTION = "uniform"
+
 # boundary-velocity quantile used to isolate the low-speed wall segment
 WALL_VELOCITY_QUANTILE = 0.25
 
@@ -471,6 +474,11 @@ def _extract_body_surface_arc(
                 nodal_y,
                 nodal_fields,
             )
+            boundary_fraction = wall_x.size / max(len(ordered_nodes), 1)
+            if boundary_fraction >= 0.8:
+                raise ValueError(
+                    "Low-speed segment spans most of the boundary loop"
+                )
             if wall_x.size > 10:
                 return wall_x, wall_y
 
@@ -1200,10 +1208,126 @@ def compute_wall_arc_length(wall_x: np.ndarray, wall_y: np.ndarray) -> np.ndarra
     return s
 
 
+def build_wall_branches(
+    wall_x: np.ndarray,
+    wall_y: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Split the body arc into lower and upper x-monotone branches.
+
+    Args:
+        wall_x: Wall x-coordinates in arc order.
+        wall_y: Wall y-coordinates in arc order.
+
+    Returns:
+        Tuple of ``(lower_x, lower_y, upper_x, upper_y)`` with each branch sorted
+        by increasing x.
+
+    Raises:
+        ValueError: If the wall arc does not contain enough points to build both
+            branches.
+    """
+
+    # validate inputs
+    if wall_x.size < 3:
+        raise ValueError("wall arc must contain at least 3 points")
+
+    # find the nose point, which separates the lower and upper branches
+    nose_index = int(np.argmin(wall_x))
+
+    # build the lower branch from trailing edge to nose
+    lower_x = wall_x[: nose_index + 1][::-1]
+    lower_y = wall_y[: nose_index + 1][::-1]
+
+    # build the upper branch from nose to trailing edge
+    upper_x = wall_x[nose_index:]
+    upper_y = wall_y[nose_index:]
+
+    # sort each branch by x so interpolation/search is well-defined
+    lower_order = np.argsort(lower_x)
+    upper_order = np.argsort(upper_x)
+
+    lower_x = lower_x[lower_order]
+    lower_y = lower_y[lower_order]
+    upper_x = upper_x[upper_order]
+    upper_y = upper_y[upper_order]
+
+    return lower_x, lower_y, upper_x, upper_y
+
+
+def pick_wall_branch(
+    wall_x: np.ndarray,
+    wall_y: np.ndarray,
+    target_y: float | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Pick the wall branch that matches the requested surface side.
+
+    Args:
+        wall_x: Wall x-coordinates in arc order.
+        wall_y: Wall y-coordinates in arc order.
+        target_y: Optional preferred surface side. Positive selects the upper
+            branch, negative selects the lower branch, and ``None`` keeps the
+            previous lower-surface default for backward compatibility.
+
+    Returns:
+        Selected wall branch as ``(branch_x, branch_y)`` sorted by increasing x.
+    """
+
+    # build the two physical branches of the body arc
+    lower_x, lower_y, upper_x, upper_y = build_wall_branches(wall_x, wall_y)
+
+    # keep backward-compatible behavior when no surface preference is given
+    if target_y is None or target_y <= 0.0:
+        return lower_x, lower_y
+
+    return upper_x, upper_y
+
+
+def build_eta_coordinates(
+    eta_max: float,
+    n_eta: int,
+    distribution: str = DEFAULT_ETA_DISTRIBUTION,
+) -> np.ndarray:
+    """Build the wall-normal sampling coordinates.
+
+    Args:
+        eta_max: Maximum wall-normal distance.
+        n_eta: Number of wall-normal sample points.
+        distribution: Point distribution name. ``uniform`` uses equally spaced
+            points and ``cosine`` clusters points near the wall.
+
+    Returns:
+        Wall-normal coordinate array from 0 to ``eta_max``.
+
+    Raises:
+        ValueError: If the distribution name is unsupported.
+    """
+
+    # validate inputs
+    if n_eta < 2:
+        raise ValueError("n_eta must be at least 2")
+
+    # build the normalized wall-normal coordinate
+    xi = np.linspace(0.0, 1.0, n_eta)
+
+    # build the requested point distribution
+    if distribution == "uniform":
+        eta = eta_max * xi
+    elif distribution == "cosine":
+        # cluster points near the wall while keeping the outer edge included
+        eta = eta_max * (1.0 - np.cos(0.5 * np.pi * xi))
+    else:
+        raise ValueError(
+            "eta distribution must be 'uniform' or 'cosine'"
+        )
+
+    return eta
+
+
 def build_station_normals(
     wall_x: np.ndarray,
     wall_y: np.ndarray,
     station_x: np.ndarray,
+    target_y: float | None = None,
     body_centroid: tuple[float, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Build station locations and unit normals pointing outward from the body.
@@ -1216,6 +1340,8 @@ def build_station_normals(
         wall_x: Wall x-coordinates (may be in loop order, not sorted).
         wall_y: Wall y-coordinates.
         station_x: Streamwise x-coordinates for the extraction stations.
+        target_y: Optional preferred wall branch. Positive chooses the upper
+            surface and negative chooses the lower surface.
         body_centroid: (x, y) centroid of the body surface. Normals point away
             from this point. If None, uses the mean of wall coordinates.
 
@@ -1223,32 +1349,34 @@ def build_station_normals(
         Tuple of (station_y, station_s, normal_x, normal_y, wall_s).
     """
 
+    # pick the physical wall branch to sample from
+    branch_x, branch_y = pick_wall_branch(wall_x, wall_y, target_y)
+
     # compute the wall arc-length coordinate
-    wall_s = compute_wall_arc_length(wall_x, wall_y)
+    wall_s = compute_wall_arc_length(branch_x, branch_y)
 
     # compute body centroid if not provided
     if body_centroid is None:
         body_centroid = (float(np.mean(wall_x)), float(np.mean(wall_y)))
     centroid_x, centroid_y = body_centroid
 
-    # for each station_x, find the wall point(s) at that x
-    # if multiple matches (upper/lower surface), pick the first one in loop order
+    # for each station_x, find the wall point on the selected branch
     station_y = np.zeros(station_x.size)
     station_s = np.zeros(station_x.size)
     station_indices = np.zeros(station_x.size, dtype=int)
 
     for i, sx in enumerate(station_x):
-        # find wall points closest to this x
-        x_dist = np.abs(wall_x - sx)
+        # find branch points closest to this x
+        x_dist = np.abs(branch_x - sx)
         closest_idx = int(np.argmin(x_dist))
         station_indices[i] = closest_idx
-        station_y[i] = wall_y[closest_idx]
+        station_y[i] = branch_y[closest_idx]
         station_s[i] = wall_s[closest_idx]
 
     # differentiate the wall polyline with respect to arc length
-    edge_order = 2 if wall_x.size >= 3 else 1
-    tangent_x = np.gradient(wall_x, wall_s, edge_order=edge_order)
-    tangent_y = np.gradient(wall_y, wall_s, edge_order=edge_order)
+    edge_order = 2 if branch_x.size >= 3 else 1
+    tangent_x = np.gradient(branch_x, wall_s, edge_order=edge_order)
+    tangent_y = np.gradient(branch_y, wall_s, edge_order=edge_order)
 
     # get tangent at each station
     station_tangent_x = tangent_x[station_indices]
@@ -1266,7 +1394,7 @@ def build_station_normals(
     # sign-correct to point away from body centroid (into the flow domain)
     for i in range(station_x.size):
         # vector from body centroid to station point
-        to_station_x = wall_x[station_indices[i]] - centroid_x
+        to_station_x = branch_x[station_indices[i]] - centroid_x
         to_station_y = station_y[i] - centroid_y
 
         # check if normal points in same general direction as centroid-to-station
@@ -1275,6 +1403,18 @@ def build_station_normals(
             # normal points toward centroid, flip it
             normal_x[i] *= -1.0
             normal_y[i] *= -1.0
+
+    # enforce the requested surface side for one-sided wall branches.
+    # Top-only and bottom-only meshes can place the centroid on the same side of
+    # the wall, which makes the centroid dot-product test ambiguous.
+    branch_y_min = float(np.min(branch_y))
+    branch_y_max = float(np.max(branch_y))
+    is_one_sided_branch = branch_y_min >= -1.0e-6 or branch_y_max <= 1.0e-6
+    if target_y is not None and is_one_sided_branch:
+        for i in range(station_x.size):
+            if target_y * normal_y[i] < 0.0:
+                normal_x[i] *= -1.0
+                normal_y[i] *= -1.0
 
     logger.debug("station normals: centroid=(%.4e, %.4e)", centroid_x, centroid_y)
 
@@ -1286,6 +1426,7 @@ def compute_eta_max(
     cell_y: np.ndarray,
     wall_x: np.ndarray,
     wall_y: np.ndarray,
+    target_y: float | None = None,
 ) -> float:
     """Estimate the wall-normal profile extent as the 95th percentile cell distance.
 
@@ -1294,14 +1435,29 @@ def compute_eta_max(
         cell_y: Cell centroid y-coordinates.
         wall_x: Wall x-coordinates.
         wall_y: Wall y-coordinates.
+        target_y: Optional preferred wall branch. Positive chooses the upper
+            surface and negative chooses the lower surface.
 
     Returns:
         eta_max in physical length units.
     """
 
+    # pick the physical wall branch before interpolating in x
+    branch_x, branch_y = pick_wall_branch(wall_x, wall_y, target_y)
+
+    # check which cells lie on the selected side of the body
+    if target_y is not None and target_y > 0.0:
+        side_mask = cell_y >= 0.0
+    else:
+        side_mask = cell_y <= 0.0
+
+    # fall back to the full mesh if the side filter would remove everything
+    if not np.any(side_mask):
+        side_mask = np.ones(cell_y.shape, dtype=bool)
+
     # interpolate wall height to centroid x locations and compute cell distance
-    wall_y_at_cells = np.interp(cell_x, wall_x, wall_y)
-    wall_distance = np.abs(cell_y - wall_y_at_cells)
+    wall_y_at_cells = np.interp(cell_x[side_mask], branch_x, branch_y)
+    wall_distance = np.abs(cell_y[side_mask] - wall_y_at_cells)
 
     # use the 95th percentile to avoid far-field corner cells skewing the range
     eta_max = float(np.quantile(wall_distance, 0.95))
@@ -1316,7 +1472,9 @@ def sample_profiles(
     wall_y: np.ndarray,
     mesh_sampler: QuadMeshSampler,
     station_x: np.ndarray,
+    target_y: float | None = None,
     n_eta: int = N_ETA,
+    eta_distribution: str = DEFAULT_ETA_DISTRIBUTION,
 ) -> SampledProfiles:
     """Sample wall-normal profiles using barycentric interpolation on the quad mesh.
 
@@ -1325,7 +1483,10 @@ def sample_profiles(
         wall_y: Lower-wall y-coordinates.
         mesh_sampler: Populated quad mesh sampler.
         station_x: Streamwise x-coordinates of extraction stations.
+        target_y: Optional preferred wall branch. Positive chooses the upper
+            surface and negative chooses the lower surface.
         n_eta: Number of wall-normal sample points per profile.
+        eta_distribution: Point distribution along the wall-normal coordinate.
 
     Returns:
         Sampled profile arrays for all requested stations.
@@ -1356,12 +1517,23 @@ def sample_profiles(
         wall_x,
         wall_y,
         station_x,
+        target_y=target_y,
         body_centroid=body_centroid,
     )
 
     # estimate the wall-normal profile extent from cell elevations
-    eta_max = compute_eta_max(mesh_sampler.cell_x, mesh_sampler.cell_y, wall_x, wall_y)
-    eta = np.linspace(0.0, eta_max, n_eta)
+    eta_max = compute_eta_max(
+        mesh_sampler.cell_x,
+        mesh_sampler.cell_y,
+        wall_x,
+        wall_y,
+        target_y=target_y,
+    )
+    eta = build_eta_coordinates(
+        eta_max,
+        n_eta,
+        distribution=eta_distribution,
+    )
 
     # initialize output arrays: shape (n_stations, n_eta)
     sample_x_all = np.zeros((n_stations, n_eta), dtype=float)

@@ -46,7 +46,7 @@ from lst_tools.extract import (
     write_profiles_tecplot,
     write_wall_profile_tecplot,
 )
-from lst_tools.extract._fequad import N_ETA
+from lst_tools.extract._fequad import DEFAULT_ETA_DISTRIBUTION, N_ETA
 
 
 # --------------------------------------------------
@@ -101,6 +101,27 @@ def cmd_extract(
             help="Streamwise x-coordinate for a profile station (repeatable, overrides lst.cfg).",
         ),
     ] = None,
+    n_eta: Annotated[
+        Optional[int],
+        typer.Option(
+            "--n-eta",
+            help="Wall-normal points per extracted profile (overrides lst.cfg).",
+        ),
+    ] = None,
+    eta_distribution: Annotated[
+        Optional[str],
+        typer.Option(
+            "--eta-distribution",
+            help="Wall-normal point distribution: uniform or cosine (overrides lst.cfg).",
+        ),
+    ] = None,
+    surface: Annotated[
+        str,
+        typer.Option(
+            "--surface",
+            help="Surface side to extract: lower or upper.",
+        ),
+    ] = "lower",
 ) -> None:
     """Extract wall-normal profiles from a Tecplot FE-quadrilateral slice.
 \f
@@ -177,11 +198,48 @@ def cmd_extract(
         else:
             resolved_stations = np.asarray(_DEFAULT_STATIONS, dtype=float)
 
+        # resolve wall-normal point count
+        # priority: CLI flag > [extract] n_eta in cfg > built-in default
+        resolved_n_eta = n_eta if n_eta is not None else (ext_cfg.n_eta if ext_cfg.n_eta is not None else N_ETA)
+        if resolved_n_eta < 2:
+            typer.echo("error: --n-eta must be at least 2", err=True)
+            raise typer.Exit(1)
+
+        # resolve wall-normal point distribution
+        # priority: CLI flag > [extract] eta_distribution in cfg > built-in default
+        resolved_eta_distribution = eta_distribution
+        if resolved_eta_distribution is None:
+            resolved_eta_distribution = ext_cfg.eta_distribution
+        if resolved_eta_distribution is None:
+            resolved_eta_distribution = DEFAULT_ETA_DISTRIBUTION
+        resolved_eta_distribution = resolved_eta_distribution.strip().lower()
+        if resolved_eta_distribution not in {"uniform", "cosine"}:
+            typer.echo(
+                "error: --eta-distribution must be 'uniform' or 'cosine'",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        # resolve requested surface side
+        # priority: CLI flag > [extract] surface in cfg > built-in default
+        resolved_surface = surface
+        if resolved_surface == "lower" and ext_cfg.surface is not None:
+            resolved_surface = ext_cfg.surface
+
+        surface_key = resolved_surface.strip().lower()
+        if surface_key not in {"lower", "upper"}:
+            typer.echo("error: --surface must be 'lower' or 'upper'", err=True)
+            raise typer.Exit(1)
+        target_y = 1.0 if surface_key == "upper" else -1.0
+
         # debug output for devs
         logger.debug("input file: %s", resolved_input)
         logger.debug("hdf5 out: %s", resolved_hdf5)
         logger.debug("mach=%.4f  T_inf=%.2f K", resolved_mach, resolved_t_inf)
         logger.debug("stations: %s", resolved_stations.tolist())
+        logger.debug("n_eta: %d", resolved_n_eta)
+        logger.debug("eta_distribution: %s", resolved_eta_distribution)
+        logger.debug("surface: %s", surface_key)
 
         # read the Tecplot FE-quad file
         typer.echo(f"reading {resolved_input}")
@@ -226,8 +284,16 @@ def cmd_extract(
         logger.debug("wall profile written: %s", resolved_wall)
 
         # sample wall-normal profiles
-        typer.echo(f"sampling {resolved_stations.size} profiles ({N_ETA} points each)")
-        raw_profiles = sample_profiles(wall_x, wall_y, mesh_sampler, resolved_stations)
+        typer.echo(f"sampling {resolved_stations.size} profiles ({resolved_n_eta} points each)")
+        raw_profiles = sample_profiles(
+            wall_x,
+            wall_y,
+            mesh_sampler,
+            resolved_stations,
+            n_eta=resolved_n_eta,
+            eta_distribution=resolved_eta_distribution,
+            target_y=target_y,
+        )
 
         # compute freestream attributes
         freestream_attrs = compute_freestream_attrs(raw_profiles, resolved_mach, resolved_t_inf)
@@ -245,7 +311,9 @@ def cmd_extract(
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
         typer.echo(f"  wall x: {float(wall_x[0]):.6f} -> {float(wall_x[-1]):.6f}")
         typer.echo(f"  eta max: {float(raw_profiles.eta[-1]):.6f}")
+        typer.echo(f"  eta distribution: {resolved_eta_distribution}")
         typer.echo(f"  Mach: {resolved_mach:.4f}  T_inf: {resolved_t_inf:.2f} K")
+        typer.echo(f"  surface: {surface_key}")
         typer.echo(f"  diagnostics: {resolved_profiles}  {resolved_wall}")
 
         if debug:

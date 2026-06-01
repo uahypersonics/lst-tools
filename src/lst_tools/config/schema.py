@@ -734,6 +734,12 @@ class ExtractConfig(_ConfigBase):
     hdf5_out: str | None = None
     profiles_out: str | None = None
     wall_out: str | None = None
+    # requested surface side for extraction (None means CLI/default behavior)
+    surface: str | None = None
+    # wall-normal points per extracted profile
+    n_eta: int | None = None
+    # wall-normal point distribution name
+    eta_distribution: str | None = None
     # streamwise x-coordinates for profile extraction (None means use CLI default)
     stations: list[float] | None = None
 
@@ -750,6 +756,31 @@ class ExtractConfig(_ConfigBase):
         for key in ("hdf5_out", "profiles_out", "wall_out"):
             if key in d and d[key] is not None:
                 kw[key] = str(d[key])
+
+        # validate surface selection
+        if "surface" in d and d["surface"] is not None:
+            raw_surface = str(d["surface"]).strip().lower()
+            if raw_surface:
+                if raw_surface not in {"lower", "upper"}:
+                    raise ValueError("extract.surface must be 'lower' or 'upper'")
+                kw["surface"] = raw_surface
+
+        # validate wall-normal point count
+        if "n_eta" in d and d["n_eta"] is not None:
+            raw_n_eta = int(d["n_eta"])
+            if raw_n_eta < 2:
+                raise ValueError("extract.n_eta must be at least 2")
+            kw["n_eta"] = raw_n_eta
+
+        # validate wall-normal point distribution
+        if "eta_distribution" in d and d["eta_distribution"] is not None:
+            raw_distribution = str(d["eta_distribution"]).strip().lower()
+            if raw_distribution:
+                if raw_distribution not in {"uniform", "cosine"}:
+                    raise ValueError(
+                        "extract.eta_distribution must be 'uniform' or 'cosine'"
+                    )
+                kw["eta_distribution"] = raw_distribution
 
         # validate stations list
         # treat empty string as unset — matches the pattern used by other optional fields
