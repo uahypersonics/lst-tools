@@ -80,6 +80,12 @@ Practical implications:
 |---|---|
 | [lastrac](lastrac.md) | Convert HDF5 base flow to `meanflow.bin` |
 
+### `lst-tools extract`
+
+| Command | Purpose |
+|---|---|
+| [extract](extract.md) | Extract wall-normal profiles from a CFD mesh |
+
 ### `lst-tools setup`
 
 | Subcommand | Purpose |

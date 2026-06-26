@@ -14,6 +14,7 @@ modules relate.
 - [Grid & Flow](core.md): Core data structures for grid and flow data
 - [Config](config.md): Configuration management and schema
 - [Convert](convert.md): Format conversion (HDF5 to meanflow.bin)
+- [Extract](extract.md): Wall-normal profile extraction from CFD meshes
 - [Setup](setup.md): LST calculation setup (parsing, tracking, spectra)
 - [Processing](processing.md): Post-processing of LST results
 - [Data I/O](data-io.md): File readers and writers

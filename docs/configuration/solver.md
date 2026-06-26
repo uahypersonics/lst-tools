@@ -1,10 +1,10 @@
 # Solver
 
-Use this section for solver mode, run parameters, and file paths.
+Set solver mode, run parameters, and file paths.
 
 ## `[lst.solver]`
 
-Adjust these only when solver formulation choices need to change.
+Set solver formulation choices.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -17,7 +17,7 @@ Adjust these only when solver formulation choices need to change.
 
 ## `[lst.options]`
 
-Use these for geometry-specific or curvature-related solver switches.
+Set geometry-specific or curvature-related solver switches.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -26,7 +26,7 @@ Use these for geometry-specific or curvature-related solver switches.
 
 ## `[lst.params]`
 
-Most parsing, spectra, and tracking inputs live here.
+Set LST parameters
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -50,9 +50,31 @@ Most parsing, spectra, and tracking inputs live here.
 
 ## `[lst.io]`
 
-Use these paths when the defaults do not match your run layout.
+Set file names (recommended: keep defaults)
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `baseflow_input` | `str` | `"meanflow.bin"` | Converted base flow file |
 | `solution_output` | `str` | `"growth_rate.dat"` | LST output file |
+
+## Example
+
+```toml
+[lst.solver]
+type               = 1
+spatial_temporal   = 1
+energy_formulation = 1
+
+[lst.params]
+ny     = 150
+x_s    = 0.10
+x_e    = 0.60
+i_step = 1
+f_min  = 50000
+f_max  = 400000
+d_f    = 10000
+
+[lst.io]
+baseflow_input  = "meanflow.bin"
+solution_output = "growth_rate.dat"
+```

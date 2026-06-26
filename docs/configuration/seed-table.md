@@ -1,6 +1,6 @@
 # Seed Table
 
-Use this section when `setup tracking` should write `seed_alpha.dat` into
+Set values when `setup tracking` is used to write `seed_alpha.dat` into
 each `kc_*` directory.
 
 | Key | Type | Default | Description |
@@ -18,5 +18,12 @@ each `kc_*` directory.
 | `threshold` | `float` | `0.15` | Solver-side override radius in normalized `(x, f)` space |
 | `output_file` | `str` | `"seed_alpha.dat"` | Output filename written into each tracking case |
 
-Enable this section only when tracking should use generated seed tables
-instead of the standard initial-guess flow.
+## Example
+
+```toml
+[seed_table]
+enabled    = true
+n_seeds    = 12
+min_growth = 0.0
+gate_tol   = 0.05
+```

@@ -1,6 +1,6 @@
 # Root
 
-Edit these keys first.
+Set base flow file name and lest executable name.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -9,3 +9,10 @@ Edit these keys first.
 
 `input_file` controls which HDF5 base flow is converted during meanflow
 preparation. `lst_exe` points to the external solver that runs after setup.
+
+## Example
+
+```toml
+input_file = "base_flow.hdf5"
+lst_exe    = "lst.x"
+```

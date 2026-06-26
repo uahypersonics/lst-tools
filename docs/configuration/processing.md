@@ -1,10 +1,10 @@
 # Processing
 
-Use this section for post-processing controls.
+Set post-processing controls.
 
 ## `[processing.tracking]`
 
-Use these values to control ridge extraction and volume assembly for
+Set values to control ridge extraction and volume assembly for
 tracking results.
 
 | Key | Type | Default | Description |
@@ -16,7 +16,7 @@ tracking results.
 
 ## `[processing.spectra]`
 
-Use these values to gate, classify, and retain spectra branches.
+Set values to gate, classify, and retain spectra branches.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -32,4 +32,20 @@ Use these values to gate, classify, and retain spectra branches.
 
 ## `[processing.parsing]`
 
-Reserved for parsing-specific post-processing controls.
+(not yet implemented)
+
+## Example
+
+```toml
+[processing.tracking]
+interpolate = true
+gate_tol    = 0.10
+min_valid   = 40
+peak_order  = 1
+
+[processing.spectra]
+alpr_min = 0.0
+alpr_max = 2.0
+alpi_min = 0.0
+alpi_max = 0.5
+```

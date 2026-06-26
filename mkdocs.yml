@@ -127,6 +127,7 @@ nav:
     - Flow Conditions: configuration/flow-conditions.md
     - Geometry: configuration/geometry.md
     - Meanflow Conversion: configuration/meanflow-conversion.md
+    - Extract: configuration/extract.md
     - Solver: configuration/solver.md
     - Processing: configuration/processing.md
     - Seed Table: configuration/seed-table.md
@@ -135,6 +136,7 @@ nav:
     - cli-reference/index.md
     - init: cli-reference/init.md
     - lastrac: cli-reference/lastrac.md
+    - extract: cli-reference/extract.md
     - setup:
       - parsing: cli-reference/setup-parsing.md
       - tracking: cli-reference/setup-tracking.md
@@ -156,6 +158,7 @@ nav:
     - Architecture: api/architecture.md
     - Grid & Flow: api/core.md
     - Config: api/config.md
+    - Extract: api/extract.md
     - Data I/O: api/data-io.md
     - Geometry: api/geometry.md
     - Convert: api/convert.md

@@ -5,11 +5,11 @@ wall-normal profiles at user-specified streamwise stations via barycentric
 interpolation, and writes an HDF5 baseflow file for use with ``lst-tools
 lastrac``.
 
-Flow parameters (Mach, T_inf) are resolved in priority order:
-  CLI flag > ``[flow_conditions]`` in ``lst.cfg`` > built-in default.
+Output paths are resolved from ``[extract]`` in ``lst.cfg``,
+or default to ``extracted_baseflow.hdf5`` next to the input file.
 
-Output paths are resolved in priority order:
-  CLI flag > ``[extract]`` in ``lst.cfg`` > derived from input file location.
+Freestream metadata (Mach, T_inf) is written to the HDF5 only when
+``[flow_conditions]`` provides both ``mach`` and ``temp_inf``.
 
 Example ``lst.cfg`` snippet::
 
@@ -74,45 +74,11 @@ def cmd_extract(
         Optional[Path],
         typer.Option("--cfg", "-c", help="Explicit lst.cfg path."),
     ] = None,
-    hdf5_out: Annotated[
-        Optional[Path],
-        typer.Option("--hdf5-out", help="Output HDF5 baseflow file path."),
-    ] = None,
-    profiles_out: Annotated[
-        Optional[Path],
-        typer.Option("--profiles-out", help="Output Tecplot profiles file path."),
-    ] = None,
-    wall_out: Annotated[
-        Optional[Path],
-        typer.Option("--wall-out", help="Output Tecplot wall curve file path."),
-    ] = None,
-    mach: Annotated[
-        Optional[float],
-        typer.Option("--mach", help="Freestream Mach number (overrides lst.cfg)."),
-    ] = None,
-    t_inf: Annotated[
-        Optional[float],
-        typer.Option("--t-inf", help="Freestream static temperature [K] (overrides lst.cfg)."),
-    ] = None,
     station: Annotated[
         Optional[List[float]],
         typer.Option(
             "--station",
             help="Streamwise x-coordinate for a profile station (repeatable, overrides lst.cfg).",
-        ),
-    ] = None,
-    n_eta: Annotated[
-        Optional[int],
-        typer.Option(
-            "--n-eta",
-            help="Wall-normal points per extracted profile (overrides lst.cfg).",
-        ),
-    ] = None,
-    eta_distribution: Annotated[
-        Optional[str],
-        typer.Option(
-            "--eta-distribution",
-            help="Wall-normal point distribution: cosine (default, clusters near wall) or uniform (overrides lst.cfg).",
         ),
     ] = None,
     surface: Annotated[
@@ -129,8 +95,9 @@ def cmd_extract(
     Workflow:
 
     1. Load project config from ``lst.cfg`` (auto-discovered or ``--cfg``).
-    2. Resolve input file, output paths, Mach, T_inf, and stations from
-       CLI flags → ``[extract]``/``[flow_conditions]`` in cfg → built-in defaults.
+    2. Resolve input file, output paths, and stations from
+       CLI flags → ``[extract]`` in cfg → built-in defaults.
+       Freestream metadata written only when mach and temp_inf are in ``[flow_conditions]``.
     3. Parse the Tecplot BLOCK FE-quad file.
     4. Identify the lower wall boundary and build the quad mesh sampler.
     5. Sample wall-normal profiles along rays perpendicular to the wall.
@@ -171,24 +138,36 @@ def cmd_extract(
             typer.echo(f"error: input file not found: {resolved_input}", err=True)
             raise typer.Exit(1)
 
-        # resolve output paths
-        # priority: CLI flag > [extract] field in cfg > next to input file
-        def _resolve_out(cli_val: Path | None, cfg_val: str | None, default_name: str) -> Path:
-            if cli_val is not None:
-                return cli_val
+        # resolve output paths from [extract] config or defaults next to input file
+        def _resolve_hdf5_out(cfg_val: str | None, default_name: str) -> Path:
             if cfg_val is not None and cfg_val.strip() != "":
                 return Path(cfg_val)
             return resolved_input.parent / default_name
 
-        resolved_hdf5 = _resolve_out(hdf5_out, ext_cfg.hdf5_out, "extracted_baseflow.hdf5")
-        resolved_profiles = _resolve_out(profiles_out, ext_cfg.profiles_out, "extracted_profiles.dat")
-        resolved_wall = _resolve_out(wall_out, ext_cfg.wall_out, "wall_profile.dat")
+        resolved_hdf5 = _resolve_hdf5_out(ext_cfg.hdf5_out, "extracted_baseflow.hdf5")
 
-        # resolve flow conditions
-        # priority: CLI flag > [flow_conditions] in cfg > built-in default
-        resolved_mach: float = mach if mach is not None else (fc_cfg.mach if fc_cfg.mach is not None else 6.0)
-        resolved_t_inf: float = t_inf if t_inf is not None else (fc_cfg.temp_inf if fc_cfg.temp_inf is not None else 50.0)
+        # optional outputs — only written when set in [extract] config
+        resolved_profiles: Path | None = (
+            Path(ext_cfg.profiles_out)
+            if ext_cfg.profiles_out and ext_cfg.profiles_out.strip()
+            else None
+        )
+        resolved_wall: Path | None = (
+            Path(ext_cfg.wall_out)
+            if ext_cfg.wall_out and ext_cfg.wall_out.strip()
+            else None
+        )
+
+        # resolve freestream conditions from [flow_conditions] config only
+        # skip freestream metadata if either value is missing
         resolved_rgas: float = fc_cfg.rgas
+        have_freestream = fc_cfg.mach is not None and fc_cfg.temp_inf is not None
+        if not have_freestream:
+            typer.echo(
+                "warning: mach and temp_inf not set in [flow_conditions] — "
+                "HDF5 freestream metadata will not be written",
+                err=True,
+            )
 
         # resolve station x-coordinates
         # priority: CLI --station (repeatable) > [extract] stations in cfg > built-in defaults
@@ -199,27 +178,15 @@ def cmd_extract(
         else:
             resolved_stations = np.asarray(_DEFAULT_STATIONS, dtype=float)
 
-        # resolve wall-normal point count
-        # priority: CLI flag > [extract] n_eta in cfg > built-in default
-        resolved_n_eta = n_eta if n_eta is not None else (ext_cfg.n_eta if ext_cfg.n_eta is not None else N_ETA)
-        if resolved_n_eta < 2:
-            typer.echo("error: --n-eta must be at least 2", err=True)
-            raise typer.Exit(1)
+        # resolve wall-normal point count from [extract] config or built-in default
+        resolved_n_eta = ext_cfg.n_eta if ext_cfg.n_eta is not None else N_ETA
 
-        # resolve wall-normal point distribution
-        # priority: CLI flag > [extract] eta_distribution in cfg > built-in default
-        resolved_eta_distribution = eta_distribution
-        if resolved_eta_distribution is None:
-            resolved_eta_distribution = ext_cfg.eta_distribution
-        if resolved_eta_distribution is None:
-            resolved_eta_distribution = DEFAULT_ETA_DISTRIBUTION
+        # resolve wall-normal point distribution from [extract] config or built-in default
+        resolved_eta_distribution = (
+            ext_cfg.eta_distribution if ext_cfg.eta_distribution is not None
+            else DEFAULT_ETA_DISTRIBUTION
+        )
         resolved_eta_distribution = resolved_eta_distribution.strip().lower()
-        if resolved_eta_distribution not in {"uniform", "cosine"}:
-            typer.echo(
-                "error: --eta-distribution must be 'uniform' or 'cosine'",
-                err=True,
-            )
-            raise typer.Exit(1)
 
         # resolve requested surface side
         # priority: CLI flag > [extract] surface in cfg > built-in default
@@ -236,7 +203,7 @@ def cmd_extract(
         # debug output for devs
         logger.debug("input file: %s", resolved_input)
         logger.debug("hdf5 out: %s", resolved_hdf5)
-        logger.debug("mach=%.4f  T_inf=%.2f K", resolved_mach, resolved_t_inf)
+        logger.debug("freestream available: %s", have_freestream)
         logger.debug("stations: %s", resolved_stations.tolist())
         logger.debug("n_eta: %d", resolved_n_eta)
         logger.debug("eta_distribution: %s", resolved_eta_distribution)
@@ -280,9 +247,10 @@ def cmd_extract(
             float(wall_x[-1]),
         )
 
-        # write the extracted wall curve diagnostic
-        write_wall_profile_tecplot(resolved_wall, wall_x, wall_y)
-        logger.debug("wall profile written: %s", resolved_wall)
+        # write the extracted wall curve diagnostic (only if configured)
+        if resolved_wall is not None:
+            write_wall_profile_tecplot(resolved_wall, wall_x, wall_y)
+            logger.debug("wall profile written: %s", resolved_wall)
 
         # sample wall-normal profiles
         typer.echo(f"sampling {resolved_stations.size} profiles ({resolved_n_eta} points each)")
@@ -297,26 +265,26 @@ def cmd_extract(
             rgas=resolved_rgas,
         )
 
-        # compute freestream attributes
-        freestream_attrs = compute_freestream_attrs(raw_profiles, resolved_mach, resolved_t_inf, rgas=resolved_rgas)
+        # compute freestream attributes from config if both mach and temp_inf are set
+        freestream_attrs: dict = {}
+        if have_freestream:
+            freestream_attrs = compute_freestream_attrs(
+                raw_profiles, fc_cfg.mach, fc_cfg.temp_inf, rgas=resolved_rgas
+            )
 
-        # write Tecplot profiles diagnostic
-        write_profiles_tecplot(resolved_profiles, raw_profiles)
-        logger.debug("profiles tecplot written: %s", resolved_profiles)
+        # write Tecplot profiles diagnostic (only if configured)
+        if resolved_profiles is not None:
+            write_profiles_tecplot(resolved_profiles, raw_profiles)
+            logger.debug("profiles tecplot written: %s", resolved_profiles)
 
-        # write HDF5 baseflow file 
+        # write HDF5 baseflow file
         write_profiles_hdf5(resolved_hdf5, raw_profiles, freestream_attrs)
 
         # print summary for the user
         typer.echo(f"{resolved_input} -> {resolved_hdf5}")
         typer.echo(f"  stations: {resolved_stations.size}")
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
-        typer.echo(f"  wall x: {float(wall_x[0]):.6f} -> {float(wall_x[-1]):.6f}")
-        typer.echo(f"  eta max: {float(raw_profiles.eta[-1]):.6f}")
-        typer.echo(f"  eta distribution: {resolved_eta_distribution}")
-        typer.echo(f"  Mach: {resolved_mach:.4f}  T_inf: {resolved_t_inf:.2f} K")
         typer.echo(f"  surface: {surface_key}")
-        typer.echo(f"  diagnostics: {resolved_profiles}  {resolved_wall}")
 
         if debug:
             typer.echo(f"  rho_inf: {freestream_attrs['static density']:.4e} kg/m^3")

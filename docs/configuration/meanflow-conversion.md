@@ -1,6 +1,6 @@
 # Meanflow Conversion
 
-Use these values to control the HDF5 to `meanflow.bin` conversion step.
+Set parameters to control the HDF5 to `meanflow.bin` conversion step.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -11,3 +11,13 @@ Use these values to control the HDF5 to `meanflow.bin` conversion step.
 
 Adjust these fields when the converted meanflow should use a specific streamwise
 slice range or stride.
+
+## Example
+
+```toml
+[meanflow_conversion]
+i_s        = 0
+i_e        = 200
+d_i        = 1
+set_v_zero = true
+```

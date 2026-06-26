@@ -1,6 +1,6 @@
 # Flow Conditions
 
-Fill these values from case metadata or `flow_conditions.dat`.
+Set flow conditions values from case metadata or `flow_conditions.dat`.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -18,5 +18,13 @@ Fill these values from case metadata or `flow_conditions.dat`.
 | `uvel_inf` | `float` | - | Freestream velocity [m/s] |
 | `visc_law` | `int` | `0` | Viscosity law index |
 
-These values usually stay fixed across parsing, tracking, and spectra for a
-single case.
+## Example
+
+```toml
+[flow_conditions]
+mach     = 6.0
+re1      = 1.2e7
+gamma    = 1.4
+temp_inf = 50.0
+visc_law = 0
+```

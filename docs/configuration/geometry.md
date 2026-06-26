@@ -10,5 +10,13 @@ Set the geometry model and reference dimensions used by the workflow.
 | `l_ref` | `float` | `1` | Reference length [m] |
 | `is_body_fitted` | `bool` | `false` | Whether the grid is body-fitted |
 
-This section controls geometry-specific behavior during meanflow conversion
-and input-deck generation.
+## Example
+
+```toml
+[geometry]
+type           = 2
+theta_deg      = 7.0
+r_nose         = 5e-05
+l_ref          = 1.0
+is_body_fitted = true
+```

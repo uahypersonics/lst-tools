@@ -1,6 +1,6 @@
 # HPC
 
-Edit this section only for cluster runs or scheduler-script generation.
+Set parameters for cluster runs and scheduler-script generation.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
@@ -12,3 +12,13 @@ Edit this section only for cluster runs or scheduler-script generation.
 
 The setup commands write scheduler scripts automatically when the scheduler
 is detected. Use this section to control the script contents.
+
+## Example
+
+```toml
+[hpc]
+account   = "myproject"
+nodes     = 4
+time      = "04:00:00"
+partition = "standard"
+```

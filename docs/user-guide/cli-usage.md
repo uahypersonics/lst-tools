@@ -37,6 +37,19 @@ Inspect `meanflow.bin` when needed:
 lst-tools info meanflow.bin
 ```
 
+## Extract Wall-Normal Profiles
+
+When the baseflow data is a CFD mesh file (Tecplot FE-quad format), extract
+wall-normal profiles before running `lst.x`:
+
+```bash
+lst-tools extract mesh.dat --station 0.10 --station 0.20 --station 0.30
+```
+
+Station locations can also be set in `lst.cfg` under `[extract] stations`.
+Set `mach` and `temp_inf` in `[flow_conditions]` to include freestream
+metadata in the HDF5 output.
+
 ## Setup Runs
 
 Prepare the broad sweep input deck:
