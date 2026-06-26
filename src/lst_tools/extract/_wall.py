@@ -142,12 +142,15 @@ def extract_body_wall(
 
     Strategy:
     1. Walk the single closed boundary loop.
-    2. Classify each node as body-surface (|y| < tol) vs. farfield (|y| >= tol),
-       where tol = 5% of (y_max - y_min).
-    3. Extract the longest contiguous sub-chain of body-surface nodes.
+    2. If velocity data is present, classify wall nodes by the no-slip
+       condition (low-speed segment of the boundary).
+    3. Otherwise, identify the body wall geometrically as the arc that runs
+       through the nose (minimum-x node) between the two trailing-edge
+       junctions (maximum-x nodes).  This handles full symmetric meshes whose
+       wall spans both the y > 0 and y < 0 surfaces.
     4. Return nodes in loop order (geometric arc order), NOT sorted by x.
 
-    Falls back to envelope-based extraction if no body-surface sub-chain is found.
+    Falls back to envelope-based extraction if no body-surface arc is found.
 
     Args:
         nodal_x: Node x-coordinates.
@@ -168,13 +171,21 @@ def extract_body_wall(
             connectivity,
             nodal_fields=nodal_fields,
         )
-        if wall_x.size > 10:
+        # trust the arc result if it found at least one node; the internal
+        # fallbacks (velocity → nose-TE → |y|<tol) are more reliable than
+        # the envelope approach below
+        if wall_x.size > 0:
+            if wall_x.size <= 10:
+                logger.debug(
+                    "body-surface arc has only %d points (may be a small mesh)",
+                    wall_x.size,
+                )
             return wall_x, wall_y
-        logger.debug("body-surface arc found only %d points, falling back", wall_x.size)
     except ValueError as e:
         logger.debug("body-surface extraction failed: %s, trying envelope", e)
 
-    # fall back to lower-envelope approach
+    # last-resort envelope fallback (kept for backward compatibility with
+    # unusual mesh topologies where the boundary-loop approach fails entirely)
     return _extract_lower_wall_envelope(nodal_x, nodal_y, connectivity)
 
 
@@ -184,7 +195,11 @@ def _extract_body_surface_arc(
     connectivity: np.ndarray,
     nodal_fields: dict[str, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Extract the body-surface arc as the longest |y|<tol sub-chain.
+    """Extract the body-surface arc from the boundary loop.
+
+    Prefers the no-slip velocity classifier when velocity data is available,
+    and otherwise identifies the body wall geometrically as the nose-to-
+    trailing-edge arc of the boundary loop.
 
     Args:
         nodal_x: Node x-coordinates.
@@ -234,28 +249,32 @@ def _extract_body_surface_arc(
         except ValueError as e:
             logger.debug("velocity-based wall classification failed: %s", e)
 
-    # define body-surface tolerance: 5% of y-range
-    y_min = nodal_y.min()
-    y_max = nodal_y.max()
-    tol = 0.05 * (y_max - y_min)
+    # geometric fallback when velocity data is unavailable.
+    #
+    # For full symmetric meshes the body wall spans both y > 0 and y < 0
+    # surfaces, so a |y| < tol test would miss half the wall.  Use the
+    # nose-to-trailing-edge arc approach instead — it identifies the wall as
+    # the arc that passes through the minimum-x node between the two
+    # most-separated max-x candidates.
+    #
+    # For half-meshes (one-sided, C-grid) the TE candidates at max-x often
+    # include farfield nodes on the same side of y=0, so the nose-TE arc
+    # would pull in the farfield arc.  _extract_body_arc_by_nose_te raises
+    # ValueError in that case; fall back to the original |y| < tol segment
+    # approach which is correct for half-meshes.
+    try:
+        body_arc = _extract_body_arc_by_nose_te(ordered_nodes, nodal_x, nodal_y)
+        logger.debug("nose-TE geometric fallback found %d body-wall nodes", len(body_arc))
+    except ValueError as e:
+        logger.debug("nose-TE fallback declined (%s); using |y|<tol segment approach", e)
+        body_arc = _extract_body_arc_y_tol(ordered_nodes, nodal_x, nodal_y)
 
-    # mark each node as body-surface vs. farfield (1-based indexing)
-    is_body = [abs(nodal_y[node - 1]) < tol for node in ordered_nodes]
-
-    # find contiguous sub-chains of body-surface nodes
-    segments = _collect_boundary_segments(ordered_nodes, is_body)
-
-    if not segments:
-        raise ValueError("No body-surface boundary segment found")
-
-    # select the longest sub-chain (the body-surface arc)
-    longest_segment = max(segments, key=len)
-    logger.debug("found %d body-surface segments, longest has %d nodes",
-                 len(segments), len(longest_segment))
+    if not body_arc:
+        raise ValueError("No body-surface boundary arc found")
 
     # extract coordinates in loop order (NOT sorted by x)
     # this preserves the arc geometry: TE-lower → nose → TE-upper
-    wall_nodes = np.array(longest_segment)
+    wall_nodes = np.asarray(body_arc, dtype=int)
     wall_x = nodal_x[wall_nodes - 1]
     wall_y = nodal_y[wall_nodes - 1]
 
@@ -310,6 +329,174 @@ def _collect_boundary_segments(
         segments.pop()
 
     return segments
+
+
+def _extract_body_arc_y_tol(
+    ordered_nodes: list[int],
+    nodal_x: np.ndarray,
+    nodal_y: np.ndarray,
+) -> list[int]:
+    """Identify the body wall as the longest |y| < tol sub-chain on the boundary.
+
+    This is the original half-mesh geometric fallback.  It works for one-sided
+    C-grids where the body wall lies at small |y| (near y = 0).  It does NOT
+    work for full symmetric meshes because the wall spans both positive and
+    negative y.
+
+    Args:
+        ordered_nodes: Boundary node IDs (1-based) in loop order.
+        nodal_x: Node x-coordinates (unused; kept for a consistent signature).
+        nodal_y: Node y-coordinates.
+
+    Returns:
+        Body-wall node IDs of the longest |y| < tol sub-chain, or an empty
+        list if no such sub-chain is found.
+    """
+
+    # define body-surface tolerance: 5% of y-range
+    y_min = nodal_y.min()
+    y_max = nodal_y.max()
+    tol = 0.05 * (y_max - y_min)
+
+    # mark each boundary node as body-surface (True) or farfield (False)
+    is_body = [abs(nodal_y[node - 1]) < tol for node in ordered_nodes]
+
+    # find contiguous sub-chains of body-surface nodes
+    segments = _collect_boundary_segments(ordered_nodes, is_body)
+
+    if not segments:
+        return []
+
+    # select and return the longest sub-chain
+    longest_segment = max(segments, key=len)
+    logger.debug(
+        "|y|<tol: found %d segments, longest has %d nodes",
+        len(segments),
+        len(longest_segment),
+    )
+    return longest_segment
+
+
+def _extract_body_arc_by_nose_te(
+    ordered_nodes: list[int],
+    nodal_x: np.ndarray,
+    nodal_y: np.ndarray,
+) -> list[int]:
+    """Identify the body-wall arc of a wrapped C-/O-mesh boundary loop.
+
+    The single closed boundary loop of an aerodynamic mesh visits the body wall
+    and the farfield exactly once each.  The body wall is the arc that passes
+    through the nose (the minimum-x node) and is delimited by the two
+    trailing-edge junctions — the nodes at the maximum x-coordinate, taken as the
+    pair most separated in y (the upper and lower trailing edge).
+
+    This approach is only valid for **full symmetric meshes** where the two TE
+    junctions lie on *opposite* sides of y = 0.  For half-meshes both junctions
+    have the same sign of y, and the arc selection can pull in farfield nodes.
+    In that case a ``ValueError`` is raised so the caller can use the
+    ``|y| < tol`` segment fallback instead.
+
+    Args:
+        ordered_nodes: Boundary node IDs (1-based) in loop order.
+        nodal_x: Node x-coordinates.
+        nodal_y: Node y-coordinates.
+
+    Returns:
+        Body-wall node IDs in loop order (TE-lower → nose → TE-upper).
+
+    Raises:
+        ValueError: If the boundary loop is empty or the TE junctions do not
+            straddle y = 0 (half-mesh geometry).
+    """
+
+    if not ordered_nodes:
+        raise ValueError("empty boundary loop")
+
+    boundary_indices = np.asarray(ordered_nodes, dtype=int) - 1
+    bx = nodal_x[boundary_indices]
+    by = nodal_y[boundary_indices]
+
+    # nose = most-upstream boundary node
+    nose_pos = int(np.argmin(bx))
+
+    # trailing-edge candidates: nodes at (within tolerance of) the maximum x
+    x_max = float(bx.max())
+    x_min = float(bx.min())
+    x_range = x_max - x_min
+    te_tol = 1.0e-6 * x_range if x_range > 0.0 else 0.0
+    te_candidates = np.flatnonzero(bx >= x_max - te_tol)
+
+    # pure O-mesh / single junction (e.g. blunt body): whole loop is the body
+    if te_candidates.size < 2:
+        return list(ordered_nodes)
+
+    # upper / lower trailing edge = the two candidates most separated in y
+    cand_y = by[te_candidates]
+    te_lo = int(te_candidates[int(np.argmin(cand_y))])
+    te_hi = int(te_candidates[int(np.argmax(cand_y))])
+
+    # check: TE junctions must straddle y = 0 (full symmetric mesh).
+    # if both are on the same side of y = 0 this is a half-mesh and the
+    # nose-TE arc selection would include farfield nodes — refuse and let
+    # the caller fall back to the |y| < tol segment approach.
+    if by[te_lo] >= 0.0 or by[te_hi] <= 0.0:
+        raise ValueError(
+            "TE junctions do not straddle y=0 "
+            f"(te_lo y={by[te_lo]:.4e}, te_hi y={by[te_hi]:.4e}); "
+            "half-mesh — use |y|<tol fallback"
+        )
+
+    # the body wall is the arc between the two TEs that contains the nose
+    return _circular_arc_through(ordered_nodes, te_lo, te_hi, nose_pos)
+
+
+def _circular_arc_through(
+    ordered_nodes: list[int],
+    start_pos: int,
+    end_pos: int,
+    via_pos: int,
+) -> list[int]:
+    """Return the loop sub-arc between two positions that passes through a third.
+
+    ``ordered_nodes`` is a closed loop, so two arcs connect ``start_pos`` and
+    ``end_pos``.  The arc that contains ``via_pos`` (endpoints inclusive) is
+    returned.
+
+    Args:
+        ordered_nodes: Boundary node IDs in loop order.
+        start_pos: Index of the first endpoint within ``ordered_nodes``.
+        end_pos: Index of the second endpoint within ``ordered_nodes``.
+        via_pos: Index of the node the returned arc must contain.
+
+    Returns:
+        Node IDs of the selected arc in loop order.
+    """
+
+    n = len(ordered_nodes)
+
+    # forward arc: start -> end walking in increasing index (wrapping)
+    forward: list[int] = []
+    forward_positions: set[int] = set()
+    pos = start_pos
+    while True:
+        forward.append(ordered_nodes[pos])
+        forward_positions.add(pos)
+        if pos == end_pos:
+            break
+        pos = (pos + 1) % n
+
+    if via_pos in forward_positions:
+        return forward
+
+    # otherwise the body arc is the complementary (backward) arc
+    backward: list[int] = []
+    pos = start_pos
+    while True:
+        backward.append(ordered_nodes[pos])
+        if pos == end_pos:
+            break
+        pos = (pos - 1) % n
+    return backward
 
 
 def _extract_velocity_wall_segment(

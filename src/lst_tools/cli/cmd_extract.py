@@ -62,6 +62,32 @@ _DEFAULT_STATIONS = [0.0025, 0.005, 0.010, 0.015, 0.020, 0.025]
 
 
 # --------------------------------------------------
+# surface-side resolution
+# --------------------------------------------------
+def _resolve_surface(cli_surface: str | None, cfg_surface: str | None) -> str:
+    """Resolve the requested surface side via a three-way fallback.
+
+    Priority: explicit CLI ``--surface`` flag > ``[extract] surface`` in cfg >
+    built-in ``"lower"`` default.  Using ``None`` as the CLI sentinel lets an
+    explicit ``--surface lower`` win over a config ``surface = "upper"`` instead
+    of being silently overridden.
+
+    Args:
+        cli_surface: Value from the ``--surface`` flag, or ``None`` if unset.
+        cfg_surface: Value from ``[extract] surface`` in cfg, or ``None`` if unset.
+
+    Returns:
+        The resolved surface string.
+    """
+
+    if cli_surface is not None:
+        return cli_surface
+    if cfg_surface is not None:
+        return cfg_surface
+    return "lower"
+
+
+# --------------------------------------------------
 # main function for the 'extract' cli command
 # --------------------------------------------------
 def cmd_extract(
@@ -82,12 +108,12 @@ def cmd_extract(
         ),
     ] = None,
     surface: Annotated[
-        str,
+        Optional[str],
         typer.Option(
             "--surface",
             help="Surface side to extract: lower or upper.",
         ),
-    ] = "lower",
+    ] = None,
 ) -> None:
     """Extract wall-normal profiles from a Tecplot FE-quadrilateral slice.
 \f
@@ -190,10 +216,8 @@ def cmd_extract(
         resolved_eta_distribution = resolved_eta_distribution.strip().lower()
 
         # resolve requested surface side
-        # priority: CLI flag > [extract] surface in cfg > built-in default
-        resolved_surface = surface
-        if resolved_surface == "lower" and ext_cfg.surface is not None:
-            resolved_surface = ext_cfg.surface
+        # priority: explicit CLI flag > [extract] surface in cfg > built-in default
+        resolved_surface = _resolve_surface(surface, ext_cfg.surface)
 
         surface_key = resolved_surface.strip().lower()
         if surface_key not in {"lower", "upper"}:
@@ -208,7 +232,7 @@ def cmd_extract(
         logger.debug("stations: %s", resolved_stations.tolist())
         logger.debug("n_eta: %d", resolved_n_eta)
         logger.debug("eta_distribution: %s", resolved_eta_distribution)
-        logger.debug("surface: %s", surface_key)
+        logger.debug("requested surface: %s", surface_key)
 
         # read the Tecplot FE-quad file
         typer.echo(f"reading {resolved_input}")
@@ -280,12 +304,16 @@ def cmd_extract(
         # write HDF5 baseflow file
         write_profiles_hdf5(resolved_hdf5, raw_profiles, freestream_attrs)
 
+        # determine the surface that was actually extracted (may differ from the
+        # requested surface when pick_wall_branch auto-falls back on a one-sided mesh)
+        actual_surface = "upper" if float(np.mean(raw_profiles.station_y)) > 0.0 else "lower"
+
         # print summary for the user
         typer.echo(f"{resolved_input} -> {resolved_hdf5}")
         typer.echo(f"  profiles: {resolved_profiles}")
         typer.echo(f"  stations: {resolved_stations.size}")
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
-        typer.echo(f"  surface: {surface_key}")
+        typer.echo(f"  surface: {actual_surface}")
 
         if debug:
             typer.echo(f"  rho_inf: {freestream_attrs['static density']:.4e} kg/m^3")
