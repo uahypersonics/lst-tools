@@ -31,7 +31,6 @@ logger = logging.getLogger(__name__)
 
 # gas properties for air
 GAMMA = 1.4
-GAS_CONSTANT = 287.05
 SUTHERLAND_T0 = 273.15
 SUTHERLAND_MU0 = 1.716e-5
 SUTHERLAND_S = 110.4
@@ -40,10 +39,17 @@ SUTHERLAND_S = 110.4
 N_ETA = 200
 
 # default wall-normal point distribution
-DEFAULT_ETA_DISTRIBUTION = "uniform"
+# cosine clusters points near the wall, which is where the boundary-layer
+# gradients live; uniform spacing starves the near-wall region of points and
+# under-resolves the velocity and temperature profiles for stability analysis
+DEFAULT_ETA_DISTRIBUTION = "cosine"
 
-# boundary-velocity quantile used to isolate the low-speed wall segment
-WALL_VELOCITY_QUANTILE = 0.25
+# wall nodes satisfy no-slip: |u|+|v|(+|w|) ≈ 0.  After IDW reconstruction
+# from cell-centred data the values aren't exactly zero, but they are much
+# smaller than the freestream speed that appears on the farfield boundary.
+# Threshold at this fraction of the peak boundary speed; nodes below the
+# threshold are classified as wall.
+WALL_VELOCITY_FRACTION = 0.05
 
 # flow field names expected in the dataset (internal canonical names)
 REQUIRED_FIELDS = ("u", "v", "w", "t", "p", "rho")
@@ -200,13 +206,17 @@ def read_fequad_block_tecplot(path: str | Path) -> TecplotUnstructuredData:
     data_start_line = header_end_line
     for line_num in range(header_end_line, min(header_end_line + 10, len(lines))):
         line = lines[line_num]
-        # try both shorthand (N=, E=) and full (Nodes=, Elements=) forms
-        node_match = re.search(r"(?:Nodes|N)\s*=\s*(\d+)", line, re.IGNORECASE)
-        elem_match = re.search(r"(?:Elements|E)\s*=\s*(\d+)", line, re.IGNORECASE)
-        if node_match:
-            n_node = int(node_match.group(1))
-        if elem_match:
-            n_elem = int(elem_match.group(1))
+        # only update N/E counts while they haven't been found yet — prevents
+        # spurious matches like the trailing 'E' in SOLUTIONTIME=5.xxx overwriting
+        # the correct n_elem already parsed from the ZONE line
+        if n_node == 0:
+            node_match = re.search(r"(?:Nodes|N)\s*=\s*(\d+)", line, re.IGNORECASE)
+            if node_match:
+                n_node = int(node_match.group(1))
+        if n_elem == 0:
+            elem_match = re.search(r"(?:Elements|E)\s*=\s*(\d+)", line, re.IGNORECASE)
+            if elem_match:
+                n_elem = int(elem_match.group(1))
         # data starts after DATAPACKING line
         if "DATAPACKING" in line.upper():
             data_start_line = line_num + 1
@@ -218,16 +228,17 @@ def read_fequad_block_tecplot(path: str | Path) -> TecplotUnstructuredData:
         raise ValueError("Could not parse N and E from Tecplot zone header")
 
     # determine which variables are cell-centered (via VARLOCATION or default)
+    # handle compound forms like ([1-3]=NODAL,[4-12]=CELLCENTERED) by first
+    # extracting the full parenthetical value, then scanning for all CELLCENTERED ranges
     cell_centered_indices: set[int] = set()
     for line_num in range(header_end_line, min(header_end_line + 10, len(lines))):
         line = lines[line_num].upper()
-        vl_match = re.search(r"VARLOCATION.*=.*\(\s*(\[[\d,\-]+\])\s*=\s*CELLCENTERED", line)
+        vl_match = re.search(r"VARLOCATION\s*=\s*\(([^)]+)\)", line)
         if vl_match:
-            range_str = vl_match.group(1)
-            range_match = re.match(r"\[(\d+)-(\d+)\]", range_str)
-            if range_match:
-                start_idx = int(range_match.group(1))
-                end_idx = int(range_match.group(2))
+            vl_content = vl_match.group(1)
+            for cc_match in re.finditer(r"\[(\d+)-(\d+)\]\s*=\s*CELLCENTERED", vl_content):
+                start_idx = int(cc_match.group(1))
+                end_idx = int(cc_match.group(2))
                 cell_centered_indices.update(range(start_idx, end_idx + 1))
 
     logger.debug("n_node=%d, n_elem=%d, data starts at line %d", n_node, n_elem, data_start_line)
@@ -463,9 +474,10 @@ def _extract_body_surface_arc(
     # walk the full loop to get ordered node list
     ordered_nodes = _walk_boundary_loop(boundary_loop)
 
-    # check for a low-velocity wall segment first when reconstructed wall values exist
+    # check for a low-velocity wall segment first when reconstructed wall values exist.
+    # u and v are required; w is optional (2-D flows may not carry it).
     if nodal_fields is not None and all(
-        field_name in nodal_fields for field_name in ("u", "v", "w")
+        field_name in nodal_fields for field_name in ("u", "v")
     ):
         try:
             wall_x, wall_y = _extract_velocity_wall_segment(
@@ -493,9 +505,6 @@ def _extract_body_surface_arc(
     y_min = nodal_y.min()
     y_max = nodal_y.max()
     tol = 0.05 * (y_max - y_min)
-
-    # TODO: for real data, prefer |u| + |v| < tol_vel as wall classifier
-    # (no-slip condition gives u=v=0 on wall nodes but not on farfield nodes)
 
     # mark each node as body-surface vs. farfield (1-based indexing)
     is_body = [abs(nodal_y[node - 1]) < tol for node in ordered_nodes]
@@ -576,22 +585,44 @@ def _extract_velocity_wall_segment(
     nodal_y: np.ndarray,
     nodal_fields: dict[str, np.ndarray],
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Extract the longest low-velocity segment from the boundary loop."""
+    """Extract the longest low-velocity segment from the boundary loop.
 
-    # build a boundary speed proxy from the reconstructed nodal velocity field
+    Uses the no-slip condition: wall nodes have u = v = (w) = 0, while
+    farfield boundary nodes carry the freestream speed.  After IDW
+    reconstruction from cell-centred data the wall values are not exactly
+    zero, but they are orders of magnitude smaller than the freestream speed
+    that appears on the opposite (farfield) boundary.  The threshold is
+    ``WALL_VELOCITY_FRACTION`` times the peak boundary speed.
+    """
+
+    # -- build boundary speed from whichever velocity components are available --
     boundary_indices = np.asarray(ordered_nodes, dtype=int) - 1
-    boundary_speed = (
-        np.abs(nodal_fields["u"][boundary_indices])
-        + np.abs(nodal_fields["v"][boundary_indices])
-        + np.abs(nodal_fields["w"][boundary_indices])
+    velocity_components = ["u", "v"]
+    if "w" in nodal_fields:
+        velocity_components.append("w")
+    boundary_speed = sum(
+        np.abs(nodal_fields[comp][boundary_indices]) for comp in velocity_components
+    )
+    # cast in case `sum` returns a Python int (empty list guard)
+    boundary_speed = np.asarray(boundary_speed, dtype=float)
+
+    # -- set threshold relative to peak boundary speed (≈ freestream speed) --
+    max_speed = float(boundary_speed.max())
+    if max_speed < 1.0e-12:
+        raise ValueError(
+            "All boundary nodes have near-zero velocity — cannot distinguish wall from farfield"
+        )
+    tol_vel = WALL_VELOCITY_FRACTION * max_speed
+
+    # debug output for devs
+    logger.debug(
+        "no-slip wall detection: max_speed=%.4e, tol_vel=%.4e (%.0f%% of max)",
+        max_speed,
+        tol_vel,
+        WALL_VELOCITY_FRACTION * 100,
     )
 
-    # reconstructed nodal wall values are not exactly zero, so use the lowest
-    # boundary-velocity band rather than an exact no-slip equality test.
-    tol_vel = float(np.quantile(boundary_speed, WALL_VELOCITY_QUANTILE))
-    min_speed = float(boundary_speed.min())
-    tol_vel = max(tol_vel, min_speed * (1.0 + 1.0e-6))
-
+    # -- classify boundary nodes and collect contiguous low-speed segments --
     is_body = (boundary_speed <= tol_vel).tolist()
     segments = _collect_boundary_segments(ordered_nodes, is_body)
     if not segments:
@@ -614,62 +645,6 @@ def _extract_velocity_wall_segment(
 
     return wall_x, wall_y
 
-
-def _extract_lower_wall_boundary(
-    nodal_x: np.ndarray,
-    nodal_y: np.ndarray,
-    connectivity: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Extract the lower wall by tracing boundary edges (original algorithm)."""
-
-    boundary_edges = build_boundary_edges(connectivity)
-    boundary_loop = order_boundary_loop(boundary_edges)
-
-    start_node = min(
-        boundary_loop,
-        key=lambda node_id: (nodal_y[node_id - 1], nodal_x[node_id - 1]),
-    )
-
-    neighbor_a, neighbor_b = boundary_loop[start_node]
-    start_neighbors = [neighbor_a, neighbor_b]
-
-    next_node = min(
-        start_neighbors,
-        key=lambda node_id: (nodal_y[node_id - 1], -nodal_x[node_id - 1]),
-    )
-
-    wall_nodes = [start_node, next_node]
-    previous_node = start_node
-    current_node = next_node
-
-    while True:
-        candidate_a, candidate_b = boundary_loop[current_node]
-        if candidate_a == previous_node:
-            next_candidate = candidate_b
-        else:
-            next_candidate = candidate_a
-
-        if next_candidate == start_node:
-            break
-
-        wall_nodes.append(next_candidate)
-        previous_node = current_node
-        current_node = next_candidate
-
-    traced_x = nodal_x[np.asarray(wall_nodes) - 1]
-    traced_y = nodal_y[np.asarray(wall_nodes) - 1]
-
-    dx = np.diff(traced_x)
-    non_increasing = np.where(dx <= 1.0e-12)[0]
-    if non_increasing.size > 0:
-        stop_index = int(non_increasing[0])
-        wall_x = traced_x[:stop_index + 1]
-        wall_y = traced_y[:stop_index + 1]
-    else:
-        wall_x = traced_x
-        wall_y = traced_y
-
-    return wall_x, wall_y
 
 
 def _extract_lower_wall_envelope(
@@ -1214,6 +1189,11 @@ def build_wall_branches(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Split the body arc into lower and upper x-monotone branches.
 
+    For a full two-sided body contour the arc is split at the nose (minimum x
+    point).  For a one-sided slice (nose at the start or end of the arc) the
+    entire arc is returned as whichever branch matches the mean y sign, and the
+    other branch is returned as an empty array.
+
     Args:
         wall_x: Wall x-coordinates in arc order.
         wall_y: Wall y-coordinates in arc order.
@@ -1233,6 +1213,21 @@ def build_wall_branches(
 
     # find the nose point, which separates the lower and upper branches
     nose_index = int(np.argmin(wall_x))
+
+    # one-sided arc: nose is at an end of the arc, not in the interior.
+    # This happens when the mesh covers only the upper or lower surface.
+    # Return the whole arc as the appropriate branch and leave the other empty.
+    if nose_index == 0 or nose_index == wall_x.size - 1:
+        order = np.argsort(wall_x)
+        sorted_x = wall_x[order]
+        sorted_y = wall_y[order]
+        empty_x: np.ndarray = np.empty(0, dtype=wall_x.dtype)
+        empty_y: np.ndarray = np.empty(0, dtype=wall_y.dtype)
+        # classify by mean y: positive y is the upper surface
+        if np.mean(wall_y) >= 0.0:
+            return empty_x, empty_y, sorted_x, sorted_y
+        else:
+            return sorted_x, sorted_y, empty_x, empty_y
 
     # build the lower branch from trailing edge to nose
     lower_x = wall_x[: nose_index + 1][::-1]
@@ -1261,6 +1256,10 @@ def pick_wall_branch(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Pick the wall branch that matches the requested surface side.
 
+    For a one-sided mesh (only upper or only lower surface present) the
+    available branch is returned automatically, with a warning if it differs
+    from what was requested.
+
     Args:
         wall_x: Wall x-coordinates in arc order.
         wall_y: Wall y-coordinates in arc order.
@@ -1277,9 +1276,29 @@ def pick_wall_branch(
 
     # keep backward-compatible behavior when no surface preference is given
     if target_y is None or target_y <= 0.0:
-        return lower_x, lower_y
+        selected_x, selected_y = lower_x, lower_y
+        requested = "lower"
+        fallback_x, fallback_y = upper_x, upper_y
+        fallback = "upper"
+    else:
+        selected_x, selected_y = upper_x, upper_y
+        requested = "upper"
+        fallback_x, fallback_y = lower_x, lower_y
+        fallback = "lower"
 
-    return upper_x, upper_y
+    # auto-fallback for one-sided meshes: if the requested branch is empty or
+    # degenerate, use the available branch and warn the user
+    if selected_x.size < 2 and fallback_x.size >= 2:
+        logger.warning(
+            "requested '%s' surface has only %d point(s) — "
+            "this appears to be a one-sided %s-surface mesh. "
+            "automatically using the '%s' surface. "
+            "pass --surface %s to suppress this warning.",
+            requested, selected_x.size, fallback, fallback, fallback,
+        )
+        return fallback_x, fallback_y
+
+    return selected_x, selected_y
 
 
 def build_eta_coordinates(
@@ -1410,9 +1429,27 @@ def build_station_normals(
     branch_y_min = float(np.min(branch_y))
     branch_y_max = float(np.max(branch_y))
     is_one_sided_branch = branch_y_min >= -1.0e-6 or branch_y_max <= 1.0e-6
-    if target_y is not None and is_one_sided_branch:
+
+    # determine the outward direction from the branch geometry itself.
+    # pick_wall_branch may auto-select the opposite surface on a one-sided mesh
+    # (e.g. a top-only mesh when the default 'lower' side was requested), so the
+    # outward normal must follow where the mesh data actually lies, not the
+    # requested target_y label.
+    # check which side the one-sided branch sits on and set the outward sign
+    if branch_y_min >= -1.0e-6:
+        # all wall points lie at y >= 0: this is an upper surface, normals go +y
+        effective_target_y = 1.0
+    elif branch_y_max <= 1.0e-6:
+        # all wall points lie at y <= 0: this is a lower surface, normals go -y
+        effective_target_y = -1.0
+    else:
+        # two-sided branch: keep the caller's requested side preference
+        effective_target_y = target_y
+
+    if effective_target_y is not None and is_one_sided_branch:
         for i in range(station_x.size):
-            if target_y * normal_y[i] < 0.0:
+            # flip any normal that points into the body instead of the flow
+            if effective_target_y * normal_y[i] < 0.0:
                 normal_x[i] *= -1.0
                 normal_y[i] *= -1.0
 
@@ -1475,6 +1512,7 @@ def sample_profiles(
     target_y: float | None = None,
     n_eta: int = N_ETA,
     eta_distribution: str = DEFAULT_ETA_DISTRIBUTION,
+    rgas: float = 287.15,
 ) -> SampledProfiles:
     """Sample wall-normal profiles using barycentric interpolation on the quad mesh.
 
@@ -1487,6 +1525,7 @@ def sample_profiles(
             surface and negative chooses the lower surface.
         n_eta: Number of wall-normal sample points per profile.
         eta_distribution: Point distribution along the wall-normal coordinate.
+        rgas: Specific gas constant (J/(kg·K)). Used for ideal-gas wall density.
 
     Returns:
         Sampled profile arrays for all requested stations.
@@ -1629,7 +1668,7 @@ def sample_profiles(
             t_profile[0] = t_profile[1]
             p_profile[0] = p_profile[1]
             if t_profile[0] > 0:
-                rho_profile[0] = p_profile[0] / (GAS_CONSTANT * t_profile[0])
+                rho_profile[0] = p_profile[0] / (rgas * t_profile[0])
             else:
                 rho_profile[0] = rho_profile[1]
 
@@ -1666,6 +1705,7 @@ def compute_freestream_attrs(
     profiles: SampledProfiles,
     mach: float,
     t_inf: float,
+    rgas: float = 287.15,
 ) -> dict[str, float]:
     """Compute HDF5 root attributes from freestream conditions via Sutherland's law.
 
@@ -1673,17 +1713,19 @@ def compute_freestream_attrs(
         profiles: Sampled wall-normal profile data (used for edge-state pressure).
         mach: Freestream Mach number.
         t_inf: Freestream static temperature in Kelvin.
+        rgas: Specific gas constant (J/(kg·K)). Should match
+            ``[flow_conditions] rgas`` in ``lst.cfg``.
 
     Returns:
-        Attribute dictionary with exact names expected by the lst_next_gen
-        ``Hdf5Loader``.
+        Attribute dictionary with freestream metadata written as HDF5 root
+        attributes. Key names are read by ``convert_meanflow`` (lastrac subcommand).
     """
 
     # compute freestream pressure from the mean edge-state value
     p_inf = float(np.mean(profiles.pres[:, -1]))
 
     # compute freestream density from the ideal gas law
-    rho_inf = p_inf / (GAS_CONSTANT * t_inf)
+    rho_inf = p_inf / (rgas * t_inf)
 
     # compute freestream viscosity from Sutherland's law
     mu_inf = (
@@ -1693,12 +1735,12 @@ def compute_freestream_attrs(
         / (t_inf + SUTHERLAND_S)
     )
 
-    # build the attribute dictionary with exact names matched by Hdf5Loader substrings
+    # build the attribute dictionary — key names matched by convert_meanflow
     attrs = {
         "mach number": mach,
         "heat capacity ratio": GAMMA,
         "prandtl number": 0.71,
-        "gas constant": GAS_CONSTANT,
+        "gas constant": rgas,
         "static temperature": t_inf,
         "static density": rho_inf,
         "freestream viscosity": mu_inf,
@@ -1715,11 +1757,10 @@ def write_profiles_hdf5(
     profiles: SampledProfiles,
     attrs: dict[str, float],
 ) -> Path:
-    """Write the extracted profiles to HDF5 in the lst_next_gen schema.
+    """Write the extracted profiles to HDF5.
 
     All datasets have shape (N_ETA, n_stations) — rows are wall-normal points,
-    columns are streamwise stations — matching the layout expected by
-    ``lst_next_gen``'s ``Hdf5Loader``.
+    columns are streamwise stations.
 
     Args:
         path: Output HDF5 file path.
@@ -1733,7 +1774,7 @@ def write_profiles_hdf5(
     # convert to Path object
     out_path = Path(path)
 
-    # write HDF5 file with the lst_next_gen schema
+    # write HDF5 file
     with h5py.File(out_path, "w") as hdf5_file:
         # write all root-level freestream attributes as scalar float64
         for attr_name, attr_value in attrs.items():
@@ -1828,7 +1869,7 @@ def write_wall_profile_tecplot(
     # write a simple ordered line zone
     with out_path.open("w", encoding="utf-8") as stream:
         stream.write('TITLE = "wall_profile"\n')
-        stream.write('VARIABLES = "x_wall" "y_wall"\n')
+        stream.write('VARIABLES = "x" "y"\n')
         stream.write(f'ZONE T="wall", I={wall_x.size}, DATAPACKING=POINT\n')
 
         for x_value, y_value in zip(wall_x, wall_y):

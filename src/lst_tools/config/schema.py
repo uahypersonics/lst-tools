@@ -766,7 +766,7 @@ class ExtractConfig(_ConfigBase):
                 kw["surface"] = raw_surface
 
         # validate wall-normal point count
-        if "n_eta" in d and d["n_eta"] is not None:
+        if "n_eta" in d and d["n_eta"] not in (None, ""):
             raw_n_eta = int(d["n_eta"])
             if raw_n_eta < 2:
                 raise ValueError("extract.n_eta must be at least 2")
@@ -854,7 +854,7 @@ class Config(_ConfigBase):
 
         # lst.solver
         s = self.lst.solver
-        if s.type is not None and s.type < 0:
+        if s.type < 0:
             errors.append("lst.solver.type must be >= 0")
         if s.spatial_temporal not in (0, 1):
             errors.append("lst.solver.spatial_temporal must be 0 or 1")

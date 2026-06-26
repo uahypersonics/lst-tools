@@ -2,8 +2,8 @@
 
 Reads a Tecplot FE-quadrilateral BLOCK ASCII symmetry slice, extracts
 wall-normal profiles at user-specified streamwise stations via barycentric
-interpolation, and writes an HDF5 baseflow file compatible with the
-``lst_next_gen`` stability solver.
+interpolation, and writes an HDF5 baseflow file for use with ``lst-tools
+lastrac``.
 
 Flow parameters (Mach, T_inf) are resolved in priority order:
   CLI flag > ``[flow_conditions]`` in ``lst.cfg`` > built-in default.
@@ -112,7 +112,7 @@ def cmd_extract(
         Optional[str],
         typer.Option(
             "--eta-distribution",
-            help="Wall-normal point distribution: uniform or cosine (overrides lst.cfg).",
+            help="Wall-normal point distribution: cosine (default, clusters near wall) or uniform (overrides lst.cfg).",
         ),
     ] = None,
     surface: Annotated[
@@ -134,7 +134,7 @@ def cmd_extract(
     3. Parse the Tecplot BLOCK FE-quad file.
     4. Identify the lower wall boundary and build the quad mesh sampler.
     5. Sample wall-normal profiles along rays perpendicular to the wall.
-    6. Write HDF5 (``lst_next_gen``-compatible schema) and two Tecplot diagnostics.
+    6. Write HDF5 baseflow file and two Tecplot diagnostics.
 
     Parameters
     ----------
@@ -176,11 +176,11 @@ def cmd_extract(
         def _resolve_out(cli_val: Path | None, cfg_val: str | None, default_name: str) -> Path:
             if cli_val is not None:
                 return cli_val
-            if cfg_val is not None:
+            if cfg_val is not None and cfg_val.strip() != "":
                 return Path(cfg_val)
             return resolved_input.parent / default_name
 
-        resolved_hdf5 = _resolve_out(hdf5_out, ext_cfg.hdf5_out, "baseflow.hdf5")
+        resolved_hdf5 = _resolve_out(hdf5_out, ext_cfg.hdf5_out, "extracted_baseflow.hdf5")
         resolved_profiles = _resolve_out(profiles_out, ext_cfg.profiles_out, "extracted_profiles.dat")
         resolved_wall = _resolve_out(wall_out, ext_cfg.wall_out, "wall_profile.dat")
 
@@ -188,6 +188,7 @@ def cmd_extract(
         # priority: CLI flag > [flow_conditions] in cfg > built-in default
         resolved_mach: float = mach if mach is not None else (fc_cfg.mach if fc_cfg.mach is not None else 6.0)
         resolved_t_inf: float = t_inf if t_inf is not None else (fc_cfg.temp_inf if fc_cfg.temp_inf is not None else 50.0)
+        resolved_rgas: float = fc_cfg.rgas
 
         # resolve station x-coordinates
         # priority: CLI --station (repeatable) > [extract] stations in cfg > built-in defaults
@@ -293,10 +294,11 @@ def cmd_extract(
             n_eta=resolved_n_eta,
             eta_distribution=resolved_eta_distribution,
             target_y=target_y,
+            rgas=resolved_rgas,
         )
 
         # compute freestream attributes
-        freestream_attrs = compute_freestream_attrs(raw_profiles, resolved_mach, resolved_t_inf)
+        freestream_attrs = compute_freestream_attrs(raw_profiles, resolved_mach, resolved_t_inf, rgas=resolved_rgas)
 
         # write Tecplot profiles diagnostic
         write_profiles_tecplot(resolved_profiles, raw_profiles)

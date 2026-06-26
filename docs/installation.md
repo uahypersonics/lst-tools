@@ -1,12 +1,5 @@
 # Installation
 
-## Requirements
-
-- Python **3.10** or later
-- The external **`lst.x`** solver on your `PATH`
-  (set its location in `lst.cfg` via `lst_exe`)
-- Optional: visualization dependency for contour plotting
-
 ## From PyPI
 
 ```bash

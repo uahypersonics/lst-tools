@@ -569,19 +569,6 @@ def _format_group_output_name(freq: float, beta: float) -> str:
     return f"spectra_f_{freq_str}_khz_beta_{beta_str}.dat"
 
 
-def _format_branch_output_name(freq: float, beta: float) -> str:
-    """Format the tracked-branch Tecplot output file name."""
-
-    freq_str = f"{freq / 1000.0:07.2f}".replace(".", "pt")
-
-    if beta >= 0.0:
-        beta_str = f"pos{abs(beta):07.2f}".replace(".", "pt")
-    else:
-        beta_str = f"neg{abs(beta):07.2f}".replace(".", "pt")
-
-    return f"spectra_branches_f_{freq_str}_khz_beta_{beta_str}.dat"
-
-
 def _format_directional_branch_output_name(
     freq: float,
     beta: float,
@@ -612,19 +599,6 @@ def _format_classified_output_name(freq: float, beta: float) -> str:
     return f"spectra_classified_f_{freq_str}_khz_beta_{beta_str}.dat"
 
 
-def _format_branch_contour_output_name(freq: float, beta: float) -> str:
-    """Format the tracked-branch contour Tecplot output file name."""
-
-    freq_str = f"{freq / 1000.0:07.2f}".replace(".", "pt")
-
-    if beta >= 0.0:
-        beta_str = f"pos{abs(beta):07.2f}".replace(".", "pt")
-    else:
-        beta_str = f"neg{abs(beta):07.2f}".replace(".", "pt")
-
-    return f"spectra_branch_contours_f_{freq_str}_khz_beta_{beta_str}.dat"
-
-
 def _format_directional_branch_contour_output_name(
     freq: float,
     beta: float,
@@ -653,19 +627,6 @@ def _format_classified_contour_output_name(freq: float, beta: float) -> str:
         beta_str = f"neg{abs(beta):07.2f}".replace(".", "pt")
 
     return f"spectra_classified_contours_f_{freq_str}_khz_beta_{beta_str}.dat"
-
-
-def _format_branch_summary_output_name(freq: float, beta: float) -> str:
-    """Format the tracked-branch summary output file name."""
-
-    freq_str = f"{freq / 1000.0:07.2f}".replace(".", "pt")
-
-    if beta >= 0.0:
-        beta_str = f"pos{abs(beta):07.2f}".replace(".", "pt")
-    else:
-        beta_str = f"neg{abs(beta):07.2f}".replace(".", "pt")
-
-    return f"spectra_branch_summary_f_{freq_str}_khz_beta_{beta_str}.csv"
 
 
 def _format_directional_branch_summary_output_name(

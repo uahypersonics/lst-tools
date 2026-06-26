@@ -188,7 +188,6 @@ def convert_meanflow(
     out: str | Path,
     *,
     cfg: Config,
-    format: str = "binary",
     debug_path: Path | str | None = None,
 ) -> Path:
     """Convert grid and flow fields to LASTRAC meanflow format.
@@ -197,7 +196,7 @@ def convert_meanflow(
       1. Compute curvilinear coordinate *s*
       2. Compute surface angle and (optionally) rotate velocity profiles
       3. Compute local body radius and curvature
-      4. Write meanflow file (Fortran binary or ASCII)
+      4. Write meanflow file (Fortran binary)
 
     Args:
         grid (Grid): Computational grid (lst_tools.core).
@@ -205,7 +204,6 @@ def convert_meanflow(
         out (str | Path): Output file path for the LASTRAC meanflow file.
         cfg (dict): Configuration object (typically ``Config`` from
             config/schema.py).
-        format (str): Output format: ``"binary"`` (default) or ``"ascii"``.
         debug_path (Path | str | None): If given, write diagnostic files
             to this directory.
 
@@ -314,7 +312,6 @@ def convert_meanflow(
     # --------------------------------------------------
     # compute drdx (change of radius along the axis of the body)
     # --------------------------------------------------
-    drdx = np.zeros_like(phi, float)
     drdx = np.sin(phi)
 
     # --------------------------------------------------

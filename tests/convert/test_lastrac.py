@@ -98,7 +98,6 @@ class TestConvertMeanflow:
             flow=mock_flow,
             out=output_path,
             cfg=base_config,
-            format="binary",
         )
 
         assert result == output_path
@@ -167,7 +166,6 @@ class TestConvertMeanflow:
             flow=mock_flow,
             out="test.bin",
             cfg=base_config,
-            format="binary",
         )
 
         assert result == Path("test.bin")
@@ -215,7 +213,6 @@ class TestConvertMeanflow:
                 flow=mock_flow,
                 out="test.bin",
                 cfg=base_config,
-                format="binary",
             )
 
     @patch("lst_tools.convert.lastrac.LastracWriter")
@@ -258,7 +255,6 @@ class TestConvertMeanflow:
             flow=mock_flow,
             out="test.bin",
             cfg=base_config,
-            format="binary",
         )
 
         assert result == Path("test.bin")
@@ -310,7 +306,6 @@ class TestConvertMeanflow:
             flow=mock_flow,
             out="test.bin",
             cfg=base_config,
-            format="binary",
         )
 
         assert result == Path("test.bin")
@@ -359,7 +354,6 @@ class TestConvertMeanflow:
             flow=mock_flow,
             out="test.bin",
             cfg=base_config,
-            format="binary",
         )
 
         assert result == Path("test.bin")
@@ -428,7 +422,7 @@ class TestConvertMeanflow:
 
         # Run conversion
         result = convert_meanflow(
-            grid=grid, flow=flow, out="test.bin", cfg=base_config, format="binary"
+            grid=grid, flow=flow, out="test.bin", cfg=base_config
         )
 
         assert result == Path("test.bin")
@@ -496,7 +490,6 @@ class TestConvertMeanflow:
             flow=mock_flow,
             out="test.bin",
             cfg=base_config,
-            format="binary",
             debug_path="./debug",
         )
 
@@ -508,7 +501,6 @@ class TestConvertMeanflow:
                 flow=mock_flow,
                 out="test2.bin",
                 cfg=base_config,
-                format="binary",
                 debug_path="./debug",
             )
             messages = " ".join(
@@ -554,7 +546,6 @@ class TestConvertMeanflow:
             flow=mock_flow,
             out=output_path,
             cfg=base_config,
-            format="binary",
         )
 
         assert result == output_path

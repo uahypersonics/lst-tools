@@ -93,6 +93,7 @@ def tracking_process(
     )
     gate_tol = proc.gate_tol if proc is not None else 0.10
     min_valid = proc.min_valid if proc is not None else 40
+    peak_order = proc.peak_order if proc is not None else 1
 
     logger.info("processing tracking results in %s", work_dir)
 
@@ -126,6 +127,7 @@ def tracking_process(
                     interpolate=use_interpolate,
                     gate_tol=gate_tol,
                     min_valid=min_valid,
+                    peak_order=peak_order,
                     mode_root_dir=work_dir,
                 )
                 total_files += len(written)
@@ -141,6 +143,7 @@ def tracking_process(
                         interpolate=use_interpolate,
                         gate_tol=gate_tol,
                         min_valid=min_valid,
+                        peak_order=peak_order,
                         mode_root_dir=work_dir,
                     )
                     total_files += len(written)

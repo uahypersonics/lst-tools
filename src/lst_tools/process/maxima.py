@@ -283,6 +283,7 @@ def extract_maxima(
     gate_tol: float = _DEFAULT_GATE_TOL,
     min_valid: int = _MIN_VALID_POINTS,
     interpolate: bool = False,
+    peak_order: int = _PEAK_ORDER,
     mode_root_dir: str | Path | None = None,
 ) -> list[Path]:
     """Extract ridge-line maxima from a single tracking case directory.
@@ -296,6 +297,9 @@ def extract_maxima(
         fname: name of the solution file to read.
         gate_tol: relative frequency gate for ridge matching.
         min_valid: minimum number of valid stations for a mode to be kept.
+        interpolate: use parabolic interpolation for sub-bin peak refinement.
+        peak_order: neighborhood size for peak detection (passed to
+            argrelmax). Higher values filter out narrow spikes.
         mode_root_dir: optional parent directory used to group outputs into
             per-mode folders. When omitted, writes flat files inside dir_name.
 
@@ -343,7 +347,7 @@ def extract_maxima(
     # --------------------------------------------------
     logger.info("extracting growth rate ridges...")
 
-    alpi_ridges = _track_ridges(alpi_2d, freq_2d, gate_tol=gate_tol, interpolate=interpolate)
+    alpi_ridges = _track_ridges(alpi_2d, freq_2d, gate_tol=gate_tol, interpolate=interpolate, peak_order=peak_order)
 
     logger.info("found %d growth rate ridge(s) in %s", len(alpi_ridges), dir_name.name)
 
@@ -363,7 +367,7 @@ def extract_maxima(
     # --------------------------------------------------
     logger.info("extracting N-factor ridges...")
 
-    nfac_ridges = _track_ridges(nfac_2d, freq_2d, gate_tol=gate_tol, interpolate=interpolate)
+    nfac_ridges = _track_ridges(nfac_2d, freq_2d, gate_tol=gate_tol, interpolate=interpolate, peak_order=peak_order)
 
     logger.info("found %d N-factor ridge(s) in %s", len(nfac_ridges), dir_name.name)
 
