@@ -146,11 +146,12 @@ def cmd_extract(
 
         resolved_hdf5 = _resolve_hdf5_out(ext_cfg.hdf5_out, "extracted_baseflow.hdf5")
 
-        # optional outputs — only written when set in [extract] config
-        resolved_profiles: Path | None = (
+        # optional outputs — default to extracted_profiles.dat; wall_out only written when
+        # explicitly set in [extract] config
+        resolved_profiles: Path = (
             Path(ext_cfg.profiles_out)
             if ext_cfg.profiles_out and ext_cfg.profiles_out.strip()
-            else None
+            else resolved_input.parent / "extracted_profiles.dat"
         )
         resolved_wall: Path | None = (
             Path(ext_cfg.wall_out)
@@ -272,16 +273,16 @@ def cmd_extract(
                 raw_profiles, fc_cfg.mach, fc_cfg.temp_inf, rgas=resolved_rgas
             )
 
-        # write Tecplot profiles diagnostic (only if configured)
-        if resolved_profiles is not None:
-            write_profiles_tecplot(resolved_profiles, raw_profiles)
-            logger.debug("profiles tecplot written: %s", resolved_profiles)
+        # write Tecplot profiles file (always — defaults to extracted_profiles.dat)
+        write_profiles_tecplot(resolved_profiles, raw_profiles)
+        logger.debug("profiles tecplot written: %s", resolved_profiles)
 
         # write HDF5 baseflow file
         write_profiles_hdf5(resolved_hdf5, raw_profiles, freestream_attrs)
 
         # print summary for the user
         typer.echo(f"{resolved_input} -> {resolved_hdf5}")
+        typer.echo(f"  profiles: {resolved_profiles}")
         typer.echo(f"  stations: {resolved_stations.size}")
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
         typer.echo(f"  surface: {surface_key}")

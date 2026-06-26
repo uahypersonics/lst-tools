@@ -55,10 +55,6 @@ def _prepare_init_config(cfg_data: dict) -> dict:
     # write the tailored processing block back into the config seed
     cfg_data["processing"] = processing_cfg
 
-    # omit the extract section: it belongs to the separate 'extract' subcommand
-    # and would only confuse a new user filling in the standard solver workflow
-    cfg_data.pop("extract", None)
-
     return cfg_data
 
 
@@ -66,70 +62,152 @@ def _inject_init_comments(config_text: str) -> str:
     """Inject short guidance comments into the init-generated TOML text."""
 
     # --------------------------------------------------
-    # inline field comments
+    # above-line field comments
     #
-    # the generated TOML uses single-space "key = value" formatting, so each
-    # target string below is unique and a plain str.replace matches exactly
-    # one line; the comment is appended after two spaces
+    # each entry is (target_string, comment_text); the comment is injected as
+    # a standalone "# ..." line immediately above the matching field line.
+    # str.replace uses count=1 so only the first occurrence is annotated — for
+    # fields that appear in multiple sections with the same key=value
+    # (gate_tol = 0.1), the second occurrence is handled via regex below.
     # --------------------------------------------------
-    field_comments = [
-        ('mach = ""', "REQUIRED — freestream Mach number"),
-        ('re1 = ""', "REQUIRED — unit Reynolds number [1/m]"),
+    above_line_comments = [
+        # top-level
+        ('lst_exe = "lst.x"', "lst solver executable name"),
+        # flow_conditions
+        ('mach = ""', "freestream mach number (required)"),
+        ('re1 = ""', "unit reynolds number (1/m) (required)"),
         ("gamma = 1.4", "ratio of specific heats"),
         ("cp = 1005.025", "specific heat at constant pressure [J/(kg K)]"),
         ("cv = 717.875", "specific heat at constant volume [J/(kg K)]"),
         ("rgas = 287.15", "specific gas constant [J/(kg K)]"),
-        (
-            'pres_0 = ""',
-            "stagnation pressure [Pa]  (optional — not used by lst.x)",
-        ),
-        (
-            'temp_0 = ""',
-            "stagnation temperature [K]  (optional — not used by lst.x)",
-        ),
-        (
-            'pres_inf = ""',
-            "freestream pressure [Pa]  (optional — not used by lst.x)",
-        ),
-        ('temp_inf = ""', "REQUIRED — freestream temperature [K]"),
-        (
-            'dens_inf = ""',
-            "freestream density [kg/m^3]  (optional — not used by lst.x)",
-        ),
-        (
-            'uvel_inf = ""',
-            "freestream velocity [m/s]  (optional — not used by lst.x)",
-        ),
+        ('pres_0 = ""', "stagnation pressure [Pa] (optional)"),
+        ('temp_0 = ""', "stagnation temperature [K] (optional)"),
+        ('pres_inf = ""', "freestream pressure [Pa] (optional)"),
+        ('temp_inf = ""', "freestream temperature [K] (required)"),
+        ('dens_inf = ""', "freestream density [kg/m^3] (optional)"),
+        ('uvel_inf = ""', "freestream velocity [m/s] (optional)"),
         ("visc_law = 0", "viscosity law: 0 = Sutherland, 1 = power law"),
+        # geometry
+        (
+            'type = ""',
+            "geometry type (required): 0=flat-plate, 1=cylinder, "
+            "2=cone, 3=generalized-axisymmetric (ogive, flared cone, ...)",
+        ),
+        ('theta_deg = ""', "half-angle [deg] — cone and generalized-axisymmetric geometries"),
+        ('r_nose = ""', "nose radius [m] — cone and generalized-axisymmetric geometries"),
+        ("l_ref = 1.0", "reference length [m]"),
+        (
+            "is_body_fitted = false",
+            "cone only: true if grid is body-fitted "
+            "(radius = x·sin θ + r_nose·cos θ); false uses y-coordinate as radius",
+        ),
+        # meanflow_conversion
         ("i_s = 0", "first station index to convert (0-based)"),
-        ('i_e = ""', "REQUIRED — last station index (inclusive)"),
+        ('i_e = ""', "last station index, inclusive (required)"),
         ("d_i = 1", "station stride"),
-        ('x_s = ""', "REQUIRED — sweep start x-station"),
-        ('x_e = ""', "REQUIRED — sweep end x-station"),
-        ('i_step = ""', "REQUIRED — station index step"),
-        ('f_min = ""', "REQUIRED — minimum frequency [Hz]"),
-        ('f_max = ""', "REQUIRED — maximum frequency [Hz]"),
-        ('d_f = ""', "REQUIRED — frequency step [Hz]"),
-        ('account = ""', "REQUIRED for HPC — scheduler account name"),
-        ('nodes = ""', "REQUIRED for HPC — node count"),
-        ('time = ""', "REQUIRED for HPC — wall-time limit (HH:MM:SS)"),
-        ('partition = ""', "REQUIRED for HPC — queue or partition name"),
+        ("set_v_zero = true", "zero wall-normal velocity in the converted meanflow"),
+        # lst.solver
+        ("type = 1", "solver type: 1=global parallel, 2=tracking, 3=3-D tracking"),
+        ("is_simplified = true", "use simplified (adiabatic) energy equation"),
+        ("alpha_i_threshold = -100.0", "discard modes with growth rate below this threshold"),
+        ("generalized = 0", "generalized eigenvalue formulation (0=standard, 1=generalized)"),
+        ("spatial_temporal = 1", "analysis type: 1=spatial, 2=temporal"),
+        ("energy_formulation = 1", "energy equation formulation"),
+        # lst.options
+        ('geometry_switch = ""', "override geometry type for the internal solver"),
+        ("longitudinal_curvature = 0", "include longitudinal curvature effects (0=off, 1=on)"),
+        # lst.params
+        ("ny = 150", "number of wall-normal Chebyshev points"),
+        ("yl_in = 0.0", "inner wall-normal boundary location"),
+        ("tol_lst = 1e-05", "eigenvalue convergence tolerance"),
+        ("max_iter = 15", "maximum secant iterations"),
+        ('x_s = ""', "sweep start x-station (required)"),
+        ('x_e = ""', "sweep end x-station (required)"),
+        ('i_step = ""', "station index step (required)"),
+        ("tracking_dir = 1", "tracking direction: 1=downstream, -1=upstream"),
+        ('f_min = ""', "minimum frequency [Hz] (required)"),
+        ('f_max = ""', "maximum frequency [Hz] (required)"),
+        ('d_f = ""', "frequency step [Hz] (required)"),
+        ("f_init = 0.0", "initial frequency for tracking (0 = use f_min)"),
+        ('beta_s = ""', "spanwise wavenumber sweep start"),
+        ('beta_e = ""', "spanwise wavenumber sweep end"),
+        ('d_beta = ""', "spanwise wavenumber step"),
+        ("beta_init = 0.0", "initial spanwise wavenumber"),
+        ('alpha_0 = "(0.0,0.0)"', "initial eigenvalue guess (real, imag)"),
+        # lst.io
+        ('baseflow_input = "meanflow.bin"', "meanflow binary file written by lst-tools lastrac"),
+        ('solution_output = "growth_rate.dat"', "output file for eigenvalue results"),
+        # hpc
+        ('account = ""', "scheduler account name (required)"),
+        ('nodes = ""', "number of nodes (required)"),
+        ('time = ""', "wall-time limit in HH:MM:SS (required)"),
+        ('partition = ""', "queue or partition name (required)"),
+        ('extra_env = ""', "extra environment variables to pass to the job"),
+        # processing.tracking
+        ("interpolate = false", "interpolate tracking results onto a regular grid"),
+        ("gate_tol = 0.1", "growth rate acceptance tolerance"),  # first occurrence → tracking
+        ("min_valid = 40", "minimum valid stations required to keep a mode"),
+        ("peak_order = 1", "order of the peak-detection filter"),
+        # processing.spectra
+        ('alpr_min = ""', "lower bound on alpha_real gate (optional)"),
+        ('alpr_max = ""', "upper bound on alpha_real gate (optional)"),
+        ('alpi_min = ""', "lower bound on alpha_imag gate (optional)"),
+        ('alpi_max = ""', "upper bound on alpha_imag gate (optional)"),
+        # seed_table
+        ("enabled = false", "enable automatic seed selection from seed table"),
+        ('source_file = ""', "path to the seed table file"),
+        ("n_seeds = 12", "number of seed eigenvalues to use per station"),
+        ("min_growth = 10.0", "minimum growth rate for seed selection [1/m]"),
+        # gate_tol = 0.1 second occurrence (seed_table) handled separately below
+        ("min_valid = 5", "minimum number of valid points to accept a seed"),
+        ("smooth_passes = 0", "number of smoothing passes over seed eigenvalues"),
+        ("gate_by_keep_mask = true", "restrict seeds to the keep-mask region"),
+        ("x_range = []", "x-station range for seed selection (empty = all)"),
+        ("f_range = []", "frequency range for seed selection [Hz] (empty = all)"),
+        ("threshold = 0.15", "N-factor threshold for seed table generation"),
+        ('output_file = "seed_alpha.dat"', "output path for the generated seed table"),
+        # extract
+        ('input_file = ""', "path to Tecplot FE-quad mesh file"),
+        ('hdf5_out = ""', "output HDF5 file path (default: extracted_baseflow.hdf5)"),
+        ('profiles_out = ""', "output path for wall-normal profiles Tecplot ASCII file (optional)"),
+        ('wall_out = ""', "output path for wall curve Tecplot ASCII file (optional)"),
+        ('surface = ""', "surface to extract: lower or upper (default: lower)"),
+        ('n_eta = ""', "number of wall-normal sample points (default: 200)"),
+        ('eta_distribution = ""', "point distribution: cosine or linear (default: cosine)"),
+        ('stations = ""', "list of x-stations to extract; example: [0.1, 0.2, 0.3]"),
     ]
 
-    # apply each field comment once, guarding against double-injection
-    for target, comment in field_comments:
-        commented_line = f"{target}  # {comment}"
-        if commented_line not in config_text:
-            config_text = config_text.replace(target, commented_line, 1)
+    # apply each above-line comment once, guarding against double-injection
+    for target, comment in above_line_comments:
+        above_line = f"# {comment}\n{target}"
+        if above_line not in config_text:
+            config_text = config_text.replace(target, above_line, 1)
 
     # --------------------------------------------------
-    # input_file value can be auto-detected, so a fixed-string replace cannot
-    # match it — append the comment to the line found by its key prefix
+    # gate_tol = 0.1 appears in both [processing.tracking] and [seed_table];
+    # the loop above annotated the first occurrence (tracking).  now annotate
+    # the second occurrence (seed_table) using a fixed-length negative
+    # lookbehind so the already-annotated tracking line is not double-injected.
     # --------------------------------------------------
-    if "# path to HDF5 baseflow file" not in config_text:
+    _tracking_gate_comment = "# growth rate acceptance tolerance\n"
+    if _tracking_gate_comment + "gate_tol = 0.1" in config_text:
         config_text = re.sub(
-            r"^(input_file = .*)$",
-            r"\1  # path to HDF5 baseflow file",
+            r"(?<!# growth rate acceptance tolerance\n)^gate_tol = 0\.1$",
+            "# growth rate acceptance tolerance\ngate_tol = 0.1",
+            config_text,
+            count=1,
+            flags=re.MULTILINE,
+        )
+
+    # --------------------------------------------------
+    # top-level input_file: value is auto-detected so use regex to locate the
+    # line; match only non-empty values to avoid re-annotating the extract
+    # section's input_file = "" (already handled by above_line_comments above)
+    # --------------------------------------------------
+    if "# path to HDF5 baseflow file (required)" not in config_text:
+        config_text = re.sub(
+            r'^(input_file = ".+")$',
+            r"# path to HDF5 baseflow file (required)\n\1",
             config_text,
             count=1,
             flags=re.MULTILINE,
@@ -141,42 +219,58 @@ def _inject_init_comments(config_text: str) -> str:
     section_blocks = [
         (
             "[flow_conditions]",
-            "# -- flow conditions -------------------------------------------------------\n"
-            "# Fill mach, re1, and temp_inf before running any subcommand.\n"
+            "# --------------------------------------------------\n"
+            "# flow conditions\n"
+            "# --------------------------------------------------\n\n"
             "[flow_conditions]",
         ),
         (
             "[geometry]",
-            "# -- geometry --------------------------------------------------------------\n"
-            "# type: 0=flat-plate  1=ogive  2=cone  3=sphere-cone  4=cylinder  5=custom\n"
+            "# --------------------------------------------------\n"
+            "# geometry\n"
+            "# --------------------------------------------------\n\n"
             "[geometry]",
         ),
         (
             "[meanflow_conversion]",
-            "# -- meanflow conversion ---------------------------------------------------\n"
-            "# Controls which stations are written to meanflow.bin by lst-tools lastrac.\n"
+            "# --------------------------------------------------\n"
+            "# meanflow conversion\n"
+            "# --------------------------------------------------\n\n"
             "[meanflow_conversion]",
         ),
         (
             "[lst.solver]",
-            "# -- LST solver ------------------------------------------------------------\n"
+            "# --------------------------------------------------\n"
+            "# LST solver\n"
+            "# --------------------------------------------------\n\n"
             "[lst.solver]",
         ),
         (
             "[lst.params]",
-            "# -- solver sweep parameters -----------------------------------------------\n"
-            "# Set x_s/x_e/i_step and f_min/f_max/d_f before running lst-tools setup parsing.\n"
+            "# --------------------------------------------------\n"
+            "# solver sweep parameters\n"
+            "# --------------------------------------------------\n\n"
             "[lst.params]",
         ),
         (
             "[hpc]",
-            "# -- HPC scheduler ---------------------------------------------------------\n"
-            "# Leave blank if running interactively.\n"
+            "# --------------------------------------------------\n"
+            "# HPC scheduler\n"
+            "# --------------------------------------------------\n\n"
             "[hpc]",
         ),
         (
+            "[extract]",
+            "# --------------------------------------------------\n"
+            "# extract (optional)\n"
+            "# --------------------------------------------------\n\n"
+            "[extract]",
+        ),
+        (
             "[processing.tracking]",
-            "# -- post-processing -------------------------------------------------------\n"
+            "# --------------------------------------------------\n"
+            "# post-processing\n"
+            "# --------------------------------------------------\n\n"
             "[processing.tracking]",
         ),
     ]
