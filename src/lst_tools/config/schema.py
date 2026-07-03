@@ -742,6 +742,12 @@ class ExtractConfig(_ConfigBase):
     eta_distribution: str | None = None
     # streamwise x-coordinates for profile extraction (None means use CLI default)
     stations: list[float] | None = None
+    # range-based station specification: start x, end x, step [m].
+    # when all three are set, stations is generated as np.arange(x_s, x_e, d_x)
+    # and takes priority over the explicit stations list.
+    x_s: float | None = None
+    x_e: float | None = None
+    d_x: float | None = None
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ExtractConfig:
@@ -792,6 +798,14 @@ class ExtractConfig(_ConfigBase):
                 raise ValueError("extract.stations must be a list of floats")
             else:
                 kw["stations"] = [float(v) for v in raw_stations]
+
+        # validate range-based station specification
+        for key in ("x_s", "x_e", "d_x"):
+            if key in d and d[key] not in (None, ""):
+                val = float(d[key])
+                if val <= 0.0:
+                    raise ValueError(f"extract.{key} must be positive")
+                kw[key] = val
 
         return cls(**kw)
 

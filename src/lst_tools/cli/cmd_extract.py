@@ -197,9 +197,20 @@ def cmd_extract(
             )
 
         # resolve station x-coordinates
-        # priority: CLI --station (repeatable) > [extract] stations in cfg > built-in defaults
+        # priority: CLI --station > [extract] x_s/x_e/d_x range > [extract] stations list > built-in defaults
         if station:
             resolved_stations = np.asarray(sorted(station), dtype=float)
+        elif (
+            ext_cfg.x_s is not None
+            and ext_cfg.x_e is not None
+            and ext_cfg.d_x is not None
+        ):
+            # generate stations from range specification
+            resolved_stations = np.arange(ext_cfg.x_s, ext_cfg.x_e + ext_cfg.d_x / 2.0, ext_cfg.d_x)
+            logger.debug(
+                "stations from x_s/x_e/d_x: %.4g to %.4g step %.4g (%d stations)",
+                ext_cfg.x_s, ext_cfg.x_e, ext_cfg.d_x, len(resolved_stations),
+            )
         elif ext_cfg.stations is not None:
             resolved_stations = np.asarray(ext_cfg.stations, dtype=float)
         else:
