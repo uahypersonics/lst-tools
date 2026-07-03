@@ -46,6 +46,7 @@ from lst_tools.extract import (
     write_profiles_tecplot,
     write_wall_profile_tecplot,
 )
+from lst_tools.extract._normalize import detect_dimensional, normalize_profiles
 from lst_tools.extract._fequad import DEFAULT_ETA_DISTRIBUTION, N_ETA
 
 
@@ -190,11 +191,16 @@ def cmd_extract(
         resolved_rgas: float = fc_cfg.rgas
         have_freestream = fc_cfg.mach is not None and fc_cfg.temp_inf is not None
         if not have_freestream:
+            typer.echo("", err=True)
             typer.echo(
-                "warning: mach and temp_inf not set in [flow_conditions] — "
-                "HDF5 freestream metadata will not be written",
+                typer.style(
+                    "WARNING: mach and temp_inf not set in [flow_conditions] --"
+                    " HDF5 freestream metadata will not be written.",
+                    fg=typer.colors.YELLOW, bold=True,
+                ),
                 err=True,
             )
+            typer.echo("", err=True)
 
         # resolve station x-coordinates
         # priority: CLI --station > [extract] x_s/x_e/d_x range > [extract] stations list > built-in defaults
@@ -308,12 +314,46 @@ def cmd_extract(
                 raw_profiles, fc_cfg.mach, fc_cfg.temp_inf, rgas=resolved_rgas
             )
 
-        # write Tecplot profiles file (always — defaults to extracted_profiles.dat)
+        # detect dimensional profiles and optionally normalize
+        is_dimensional = detect_dimensional(raw_profiles)
+        if is_dimensional and not ext_cfg.nondimensionalize:
+            typer.echo("", err=True)
+            typer.echo(
+                typer.style(
+                    "WARNING: profiles appear dimensional (mean edge velocity > 5 m/s)"
+                    " but [extract] nondimensionalize = false."
+                    " Set nondimensionalize = true to divide by edge values before writing HDF5.",
+                    fg=typer.colors.YELLOW, bold=True,
+                ),
+                err=True,
+            )
+            typer.echo("", err=True)
+        profiles_to_write = raw_profiles
+        nondim_profiles_path: Path | None = None
+        if is_dimensional and ext_cfg.nondimensionalize:
+            profiles_to_write, edge_values = normalize_profiles(raw_profiles)
+            # store edge values as freestream attrs so downstream tools can reconstruct
+            freestream_attrs.update({
+                "uvel_edge": float(edge_values["uvel_e"].mean()),
+                "temp_edge": float(edge_values["temp_e"].mean()),
+                "rho_edge":  float(edge_values["rho_e"].mean()),
+            })
+            # path for the non-dimensional Tecplot output
+            nondim_profiles_path = resolved_profiles.with_stem(
+                resolved_profiles.stem + "_nondimensional"
+            )
+
+        # write Tecplot profiles file — dimensional, always written for inspection
         write_profiles_tecplot(resolved_profiles, raw_profiles)
         logger.debug("profiles tecplot written: %s", resolved_profiles)
 
+        # write non-dimensional Tecplot file when normalization was applied
+        if nondim_profiles_path is not None:
+            write_profiles_tecplot(nondim_profiles_path, profiles_to_write)
+            logger.debug("non-dimensional profiles tecplot written: %s", nondim_profiles_path)
+
         # write HDF5 baseflow file
-        write_profiles_hdf5(resolved_hdf5, raw_profiles, freestream_attrs)
+        write_profiles_hdf5(resolved_hdf5, profiles_to_write, freestream_attrs)
 
         # determine the surface that was actually extracted (may differ from the
         # requested surface when pick_wall_branch auto-falls back on a one-sided mesh)
@@ -321,7 +361,9 @@ def cmd_extract(
 
         # print summary for the user
         typer.echo(f"{resolved_input} -> {resolved_hdf5}")
-        typer.echo(f"  profiles: {resolved_profiles}")
+        typer.echo(f"  profiles (dimensional): {resolved_profiles}")
+        if nondim_profiles_path is not None:
+            typer.echo(f"  profiles (non-dim):     {nondim_profiles_path}")
         typer.echo(f"  stations: {resolved_stations.size}")
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
         typer.echo(f"  surface: {actual_surface}")

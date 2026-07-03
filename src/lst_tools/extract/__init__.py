@@ -11,6 +11,7 @@ from ._fequad import (
     write_profiles_tecplot,
     write_wall_profile_tecplot,
 )
+from ._normalize import detect_dimensional, normalize_profiles
 
 __all__ = [
     "SampledProfiles",
