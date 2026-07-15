@@ -12,7 +12,7 @@ from lst_tools.config.schema import Config
 from lst_tools.config.geometry import GeometryPreset, GEOMETRY_TEMPLATES
 from lst_tools.config.merge import merge_dicts, merge_flow_defaults
 from lst_tools.cli.cmd_init import _inject_init_comments
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 
 DEFAULTS = Config().to_dict()
 

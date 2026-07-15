@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import re
 from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 from lst_tools.config.schema import Config
 
 runner = CliRunner()
@@ -26,20 +27,27 @@ class TestTrackingCLI:
 
     @patch("lst_tools.cli.cmd_tracking.tracking_setup")
     @patch("lst_tools.cli.cmd_tracking.read_config")
-    def test_run_without_debug(self, mock_read_config, mock_tracking_setup):
+    def test_run_without_verbose(self, mock_read_config, mock_tracking_setup):
         mock_cfg = Config()
         mock_read_config.return_value = mock_cfg
         result = runner.invoke(cli, ["setup", "tracking"])
         assert result.exit_code == 0
         mock_read_config.assert_called_once_with(path=None)
-        mock_tracking_setup.assert_called_once_with(cfg=mock_cfg, debug_path=None, auto_fill=False, force=False, cfg_path=None, finit=None)
+        mock_tracking_setup.assert_called_once_with(
+            cfg=mock_cfg,
+            debug_path=None,
+            auto_fill=False,
+            force=False,
+            cfg_path=Path("lst.cfg"),
+            finit=None,
+        )
 
     @patch("lst_tools.cli.cmd_tracking.tracking_setup")
     @patch("lst_tools.cli.cmd_tracking.read_config")
-    def test_run_with_debug(self, mock_read_config, mock_tracking_setup):
+    def test_run_with_verbose(self, mock_read_config, mock_tracking_setup):
         mock_cfg = Config()
         mock_read_config.return_value = mock_cfg
-        result = runner.invoke(cli, ["--debug", "setup", "tracking"])
+        result = runner.invoke(cli, ["--verbose", "setup", "tracking"])
         assert result.exit_code == 0
         mock_tracking_setup.assert_called_once()
         call_kwargs = mock_tracking_setup.call_args[1]

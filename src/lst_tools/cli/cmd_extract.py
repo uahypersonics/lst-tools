@@ -47,7 +47,7 @@ from lst_tools.extract import (
     write_wall_profile_tecplot,
 )
 from lst_tools.extract._normalize import detect_dimensional, normalize_profiles
-from lst_tools.extract._fequad import DEFAULT_ETA_DISTRIBUTION, N_ETA
+from lst_tools.extract._profile import DEFAULT_ETA_DISTRIBUTION, N_ETA
 
 
 # --------------------------------------------------
@@ -92,7 +92,6 @@ def _resolve_surface(cli_surface: str | None, cfg_surface: str | None) -> str:
 # main function for the 'extract' cli command
 # --------------------------------------------------
 def cmd_extract(
-    ctx: typer.Context,
     input_file: Annotated[
         Optional[Path],
         typer.Argument(help="Tecplot FE-quad BLOCK ASCII input file."),
@@ -132,14 +131,12 @@ def cmd_extract(
 
     Parameters
     ----------
-    ctx : typer.Context
-        Typer context carrying the ``debug`` flag from the parent callback.
     input_file : Path | None
         Positional input file argument. Overrides ``[extract] input_file`` in cfg.
     """
 
-    # set debug flag based on parent context
-    debug = ctx.obj.get("debug", False) if ctx.obj else False
+    # resolve verbose diagnostics state from logger configuration
+    verbose = logging.getLogger("lst_tools").isEnabledFor(logging.DEBUG)
 
     try:
         # load config (tolerates missing file; uses defaults)
@@ -368,7 +365,7 @@ def cmd_extract(
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
         typer.echo(f"  surface: {actual_surface}")
 
-        if debug:
+        if verbose and have_freestream:
             typer.echo(f"  rho_inf: {freestream_attrs['static density']:.4e} kg/m^3")
             typer.echo(f"  mu_inf:  {freestream_attrs['freestream viscosity']:.4e} Pa·s")
 

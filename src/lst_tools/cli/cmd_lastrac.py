@@ -2,7 +2,7 @@
 
 Reads an HDF5 base-flow file (grid + flow solution), applies the
 configuration from ``lst.cfg``, and writes a LASTRAC-compatible
-``meanflow.bin`` binary file.  When ``--debug`` is active a Tecplot
+``meanflow.bin`` binary file.  When ``--verbose`` is active a Tecplot
 ASCII snapshot of the base flow is also written.
 """
 
@@ -121,7 +121,6 @@ def _load_with_cfd_io(fpath: Path) -> tuple[Grid, Flow, dict]:
 # main function for the 'lastrac' cli option
 # --------------------------------------------------
 def cmd_lastrac(
-    ctx: typer.Context,
     cfg: Annotated[
         Optional[Path], typer.Option("--cfg", "-c", help="Explicit config file path.")
     ] = None,
@@ -133,21 +132,19 @@ def cmd_lastrac(
 
     1. Load the project config (auto-discovered or via ``--cfg``).
     2. Read the HDF5 input file specified by ``config.input_file``.
-    3. If ``--debug`` is active, write a Tecplot ASCII file of the
+    3. If ``--verbose`` is active, write a Tecplot ASCII file of the
        base flow to ``./debug/debug_base_flow.dat``.
     4. Run ``convert_meanflow()`` to produce ``meanflow.bin``.
 
     Parameters
     ----------
-    ctx : typer.Context
-        Typer context carrying the ``debug`` flag from the parent callback.
     cfg : Path | None
         Explicit path to a config file.  When *None*, the standard
         config discovery logic is used (``read_config()``).
     """
 
-    # set debug flag based on parent context (``--debug`` is a global option set in the main callback)
-    debug = ctx.obj.get("debug", False) if ctx.obj else False
+    # resolve verbose diagnostics state from logger configuration
+    verbose = logging.getLogger("lst_tools").isEnabledFor(logging.DEBUG)
 
     # initialize debug_path
     debug_path = None
@@ -164,9 +161,9 @@ def cmd_lastrac(
 
         grid, flow, _attrs = _load_with_cfd_io(fname_hdf5)
 
-        # debug output if --debug option is active
+        # diagnostic output if --verbose option is active
         # writes Tecplot ASCII base flow to ./debug/debug_base_flow.dat
-        if debug:
+        if verbose:
 
             # set debug path
             debug_path = Path("./debug")

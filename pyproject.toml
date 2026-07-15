@@ -43,7 +43,7 @@ packages = { find = { where = ["src"] } }
 [tool.setuptools_scm]
 
 [project.scripts]
-lst-tools = "lst_tools.cli.main:cli"
+lst-tools = "lst_tools.cli.app:cli"
 
 
 [tool.pytest.ini_options]

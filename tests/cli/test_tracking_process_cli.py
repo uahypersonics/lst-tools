@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 from lst_tools.config.schema import Config
 
 runner = CliRunner()

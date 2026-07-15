@@ -44,7 +44,7 @@ def cmd_spectra(
     5. Write a ``run_cases.sh`` launcher script.
     """
 
-    # debug output for devs (only displayed if --debug mode is active in the parent context)
+    # diagnostic output (only displayed if --verbose mode is active in the parent context)
     logger.debug("setting up spectra calculations")
 
     try:

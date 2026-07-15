@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 # main function for the 'tracking' cli option
 # --------------------------------------------------
 def cmd_tracking(
-    ctx: typer.Context,
     cfg: Annotated[
         Optional[Path],
         typer.Option("--cfg", "-c", help="Path to configuration file (e.g. lst.cfg)."),
@@ -64,16 +63,16 @@ def cmd_tracking(
     3. For every combination, scaffold a case directory, generate an
        LST input deck, and write an HPC run script.
     4. Write a ``run_jobs.sh`` launcher script.
-    5. If ``--debug`` is active, write diagnostic output to ``./debug/``.
+    5. If ``--verbose`` is active, write diagnostic output to ``./debug/``.
     """
 
-    # get debug flag from parent context (set by --debug in the main cli callback)
-    debug = ctx.obj.get("debug", False) if ctx.obj else False
+    # resolve verbose diagnostics state from logger configuration
+    verbose = logging.getLogger("lst_tools").isEnabledFor(logging.DEBUG)
 
-    # initialize debug_path to None; if debug mode is active, set to ./debug
+    # initialize debug_path to None; if verbose diagnostics are active, set to ./debug
     debug_path = None
 
-    if debug:
+    if verbose:
         debug_path = Path("./debug")
         debug_path.mkdir(parents=True, exist_ok=True)
 

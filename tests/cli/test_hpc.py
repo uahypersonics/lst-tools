@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 from typer.testing import CliRunner
 
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 from lst_tools.config.schema import Config
 
 runner = CliRunner()
@@ -27,7 +27,7 @@ class TestHpcCommand:
     @patch("lst_tools.cli.cmd_hpc.read_config")
     @patch("lst_tools.cli.cmd_hpc.hpc_configure")
     @patch("lst_tools.cli.cmd_hpc.script_build")
-    def test_run_basic_debug(
+    def test_run_basic_verbose(
         self,
         mock_script_build,
         mock_hpc_configure,
@@ -38,7 +38,7 @@ class TestHpcCommand:
         mock_hpc_configure.return_value = mock_hpc_cfg
         mock_script_build.return_value = "script.sh"
 
-        result = runner.invoke(cli, ["--debug", "hpc"])
+        result = runner.invoke(cli, ["--verbose", "hpc"])
         assert result.exit_code == 0
         assert "run script written to" in result.output
 

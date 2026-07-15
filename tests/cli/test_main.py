@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 
 runner = CliRunner()
 

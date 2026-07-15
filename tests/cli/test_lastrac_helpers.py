@@ -10,7 +10,7 @@ import numpy as np
 from typer.testing import CliRunner
 
 from lst_tools.cli.cmd_lastrac import _load_with_cfd_io, _to_2d
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 from lst_tools.config.schema import Config
 
 runner = CliRunner()
@@ -90,13 +90,13 @@ def test_load_with_cfd_io_rejects_non_structured_grid(monkeypatch) -> None:
 @patch("lst_tools.cli.cmd_lastrac.convert_meanflow")
 @patch("lst_tools.cli.cmd_lastrac._load_with_cfd_io")
 @patch("lst_tools.cli.cmd_lastrac.read_config")
-def test_lastrac_debug_mode_writes_debug_file(
+def test_lastrac_verbose_mode_writes_debug_file(
     mock_read_config,
     mock_load_with_cfd_io,
     mock_convert,
     tmp_path: Path,
 ) -> None:
-    """Write debug tecplot file when global --debug is enabled."""
+    """Write debug tecplot file when global --verbose is enabled."""
     cfg = Config()
     cfg.input_file = "base_flow.hdf5"
     mock_read_config.return_value = cfg
@@ -117,7 +117,7 @@ def test_lastrac_debug_mode_writes_debug_file(
         try:
             import os
             os.chdir(tmp_path)
-            result = runner.invoke(cli, ["--debug", "lastrac"])
+            result = runner.invoke(cli, ["--verbose", "lastrac"])
         finally:
             os.chdir(prev)
 

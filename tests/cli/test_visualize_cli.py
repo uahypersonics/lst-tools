@@ -11,7 +11,7 @@ import pytest
 
 from typer.testing import CliRunner
 
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 from lst_tools.cli.cmd_visualize import (
     _compute_shared_bounds,
     _discover_tracking_files,

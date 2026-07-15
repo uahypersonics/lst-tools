@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 from lst_tools.config.schema import Config
 
 runner = CliRunner()
@@ -123,12 +123,12 @@ class TestParsingCLI:
 
     @patch("lst_tools.cli.cmd_parsing.parsing_setup")
     @patch("lst_tools.cli.cmd_parsing.read_config")
-    def test_run_debug_output(self, mock_read_config, mock_parsing_setup, caplog):
+    def test_run_verbose_output(self, mock_read_config, mock_parsing_setup, caplog):
         mock_read_config.return_value = Config()
         mock_parsing_setup.return_value = "written_file_path"
 
         with caplog.at_level(logging.DEBUG, logger="lst_tools"):
-            result = runner.invoke(cli, ["--debug", "setup", "parsing"])
+            result = runner.invoke(cli, ["--verbose", "setup", "parsing"])
         assert result.exit_code == 0
         assert "setting up input deck for parsing step" in caplog.text
 

@@ -12,7 +12,7 @@ import numpy as np
 from typer.testing import CliRunner
 
 from lst_tools.cli.cmd_visualize_meanflow import _visualize_meanflow
-from lst_tools.cli.main import cli
+from lst_tools.cli.app import cli
 
 
 runner = CliRunner()

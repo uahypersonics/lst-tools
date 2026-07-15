@@ -53,7 +53,7 @@ def cmd_hpc(
         # configure HPC settings
         hpc_cfg = hpc_configure(config, set_defaults=True)
 
-        # debug output (logger.debug will only print if --debug mode is enabled)
+        # diagnostic output (logger.debug will only print if --verbose mode is enabled)
         logger.debug("hpc configuration: %s", hpc_cfg)
 
         # resolve LST executable

@@ -85,7 +85,12 @@ jobs:
 
           Once Zenodo archiving is enabled for this repository, cite the Zenodo DOI for the exact release as well.
           EOF
-      - name: Create GitHub Release
-        run: gh release create "${{ github.ref_name }}" --generate-notes --notes-file release-notes-extra.md
+      - name: Create GitHub Release (skip if it already exists)
+        run: |
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists; skipping."
+          else
+            gh release create "${{ github.ref_name }}" --generate-notes --notes-file release-notes-extra.md
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
