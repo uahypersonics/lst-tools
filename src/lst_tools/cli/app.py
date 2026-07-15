@@ -75,13 +75,29 @@ cli.callback()(cli_callback)
     
 # workflow commands
 cli.command(name="init", rich_help_panel="Workflow")(cmd_init)
-cli.add_typer(setup_app, name="setup", rich_help_panel="Workflow")
-cli.add_typer(clean_app, name="clean", rich_help_panel="Workflow")
-cli.add_typer(process_app, name="process", rich_help_panel="Workflow")
+cli.add_typer(
+    setup_app,
+    name="setup",
+    rich_help_panel="Workflow",
+    invoke_without_command=True,
+)
+cli.add_typer(
+    clean_app,
+    name="clean",
+    rich_help_panel="Workflow",
+    invoke_without_command=True,
+)
+cli.add_typer(
+    process_app,
+    name="process",
+    rich_help_panel="Workflow",
+    invoke_without_command=True,
+)
 cli.add_typer(
     visualize_app,
     name="visualize",
     rich_help_panel="Workflow",
+    invoke_without_command=True,
 )
 
 # utility commands

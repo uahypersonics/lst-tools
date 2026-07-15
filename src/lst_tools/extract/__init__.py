@@ -23,4 +23,6 @@ __all__ = [
     "write_profiles_hdf5",
     "write_profiles_tecplot",
     "write_wall_profile_tecplot",
+    "detect_dimensional",
+    "normalize_profiles",
 ]

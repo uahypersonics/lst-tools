@@ -34,7 +34,9 @@ class TestVisualizeCLI:
 
     def test_visualize_group_no_args_shows_help(self):
         result = runner.invoke(cli, ["visualize"])
-        assert result.exit_code == 0
+        # Click/Typer versions differ here: some return 0 with no_args_is_help,
+        # others return 2 while still printing the subgroup help text.
+        assert result.exit_code in (0, 2)
         assert "Visualize LST results." in result.output
         assert "parsing" in result.output
         assert "tracking" in result.output

@@ -170,7 +170,7 @@ class TestLastracBinaryRoundtrip:
     def test_single_station(self, tmp_path):
         """Edge case: file with exactly one station."""
         binfile = tmp_path / "meanflow.bin"
-        truth = _write_synthetic_binary(binfile, n_stations=1, n_eta=3)
+        _write_synthetic_binary(binfile, n_stations=1, n_eta=3)
 
         reader = LastracReader(binfile, endianness="<")
         header = reader.read_header()

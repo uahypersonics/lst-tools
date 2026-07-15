@@ -400,13 +400,14 @@ def main() -> None:
     fragments.append(arrow_svg(parsing_x + BOX_WIDTH, int(parsing_mid_y), tracking_x, int(parsing_mid_y)))
 
     # write
+    fragments_block = "\n  ".join(fragments)
     svg_text = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">
     <defs>
         <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="6.2" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill="{ARROW_COLOR}" />
         </marker>
     </defs>
-    {'\n  '.join(fragments)}
+    {fragments_block}
 </svg>
 '''
 

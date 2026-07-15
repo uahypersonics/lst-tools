@@ -8,7 +8,6 @@ import pytest
 
 from lst_tools.config import Config
 from lst_tools.process.spectra import spectra_process
-from lst_tools.cli.cmd_spectra_process import cmd_spectra_process
 
 
 def test_spectra_process_no_case_dirs_returns_current_path(tmp_path: Path, monkeypatch) -> None:
