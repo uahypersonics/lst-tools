@@ -359,20 +359,19 @@ class TestConvertMeanflow:
         assert result == Path("test.bin")
         # Should only process 1 station (index 1) with stride 2
         assert mock_writer.write_station_header.call_count == 1
-        # Check that station header carries the local LASTRAC scales
+        # Check that station header carries cfg-driven reference scales
         _, kwargs = mock_writer.write_station_header.call_args
         assert kwargs["i_loc"] == 2  # Fortran index = Python index + 1
         assert kwargs["n_eta"] == 2
         assert kwargs["s"] == pytest.approx(1.0)
-        assert kwargs["lref"] == pytest.approx(1.0e-3)
-        assert kwargs["re1"] == pytest.approx(1.0e3)
+        assert kwargs["lref"] == pytest.approx(base_config.geometry.l_ref)
+        assert kwargs["re1"] == pytest.approx(base_config.flow_conditions.re1)
         assert kwargs["kappa"] == pytest.approx(0.0)
         assert kwargs["rloc"] == pytest.approx(0.0)
         assert kwargs["drdx"] == pytest.approx(0.0)
         assert kwargs["stat_temp"] == pytest.approx(300.0)
-        assert kwargs["stat_uvel"] == pytest.approx(1.0)
-        expected_rho_edge = 101325.0 / (base_config.flow_conditions.rgas * 300.0)
-        assert kwargs["stat_dens"] == pytest.approx(expected_rho_edge)
+        assert kwargs["stat_uvel"] == pytest.approx(base_config.flow_conditions.uvel_inf)
+        assert kwargs["stat_dens"] == pytest.approx(base_config.flow_conditions.dens_inf)
 
     @patch("lst_tools.convert.lastrac.LastracWriter")
     @patch("lst_tools.convert.lastrac.radius")
