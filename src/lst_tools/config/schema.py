@@ -243,6 +243,7 @@ class FlowConditions(_ConfigBase):
     """Free-stream / stagnation flow conditions."""
     mach: float | None = None
     re1: float | None = None
+    pr: float = 0.71
     gamma: float = 1.4
     cp: float = 1005.025
     cv: float = 717.875
@@ -311,16 +312,19 @@ class MeanflowConversion(_ConfigBase):
     i_e: int | None = None
     d_i: int = 1
     set_v_zero: bool = True
+    nondimensionalize: bool = False
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> MeanflowConversion:
         """Build a ``MeanflowConversion`` from a plain dict."""
         _svz = d.get("set_v_zero")
+        _nd = d.get("nondimensionalize")
         return cls(
             i_s=int(d.get("i_s", 0)),
             i_e=_opt_int(d.get("i_e")),
             d_i=int(d.get("d_i", 1)),
             set_v_zero=_coerce_bool(_svz) if _svz is not None else True,
+            nondimensionalize=_coerce_bool(_nd) if _nd is not None else False,
         )
 
 
