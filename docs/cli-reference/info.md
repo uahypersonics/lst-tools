@@ -2,6 +2,9 @@
 
 Inspect a meanflow binary.
 
+The file header is printed once. Each station then reports its own streamwise
+location, eta bounds, point count, geometry values, and reference quantities.
+
 ## Argument
 
 | Argument | Meaning |

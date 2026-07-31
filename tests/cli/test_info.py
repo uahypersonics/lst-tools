@@ -42,29 +42,39 @@ def test_cmd_info_success_prints_summary(tmp_path: Path, capsys: pytest.CaptureF
         "nsp": 1,
     }
     sh0 = {
+        "i_loc": 1,
         "s": 0.1,
-        "n_eta": 5,
+        "n_eta": 3,
         "re1": 1.0e6,
         "lref": 0.5,
         "stat_temp": 250.0,
         "stat_uvel": 1200.0,
         "stat_dens": 0.2,
         "kappa": 0.01,
+        "rloc": 0.02,
+        "drdx": 0.03,
     }
     sh1 = {
+        "i_loc": 2,
         "s": 0.4,
-        "n_eta": 5,
-        "re1": 1.0e6,
-        "lref": 0.5,
-        "stat_temp": 250.0,
-        "stat_uvel": 1200.0,
-        "stat_dens": 0.2,
+        "n_eta": 4,
+        "re1": 2.0e6,
+        "lref": 0.75,
+        "stat_temp": 275.0,
+        "stat_uvel": 1300.0,
+        "stat_dens": 0.3,
         "kappa": 0.03,
+        "rloc": 0.04,
+        "drdx": 0.05,
     }
 
     reader = MagicMock()
     reader.read_header.return_value = header
     reader.read_station_header.side_effect = [sh0, sh1]
+    reader.read_station_vector.side_effect = [
+        np.array([0.0, 0.5, 1.0]),
+        np.array([0.0, 0.4, 0.8, 1.2]),
+    ]
 
     # execute
     with patch("lst_tools.cli.cmd_info.LastracReader", return_value=reader):
@@ -72,11 +82,19 @@ def test_cmd_info_success_prints_summary(tmp_path: Path, capsys: pytest.CaptureF
 
     # validate
     captured = capsys.readouterr()
-    assert "station summary" in captured.out
-    assert "reference quantities" in captured.out
+    assert "station 1" in captured.out
+    assert "station 2" in captured.out
+    assert "reference quantities" not in captured.out
     assert "n_station:  2" in captured.out
-    reader.skip_records.assert_called_with(6)
+    assert "n_eta:      3" in captured.out
+    assert "n_eta:      4" in captured.out
+    assert "eta_max:    1.000000e+00" in captured.out
+    assert "eta_max:    1.200000e+00" in captured.out
+    assert "re1:        1.000000e+06" in captured.out
+    assert "re1:        2.000000e+06" in captured.out
+    reader.skip_records.assert_called_with(5)
     assert reader.skip_records.call_count == 2
+    assert reader.read_station_vector.call_count == 2
     reader.close.assert_called_once()
 
 
@@ -125,6 +143,8 @@ def test_cmd_info_writes_profiles_tecplot(
         "stat_uvel": 1200.0,
         "stat_dens": 0.2,
         "kappa": 0.01,
+        "rloc": 0.02,
+        "drdx": 0.03,
     }
 
     reader = MagicMock()

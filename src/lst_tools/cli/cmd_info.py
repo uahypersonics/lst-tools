@@ -3,6 +3,9 @@
 Reads a LASTRAC ``meanflow.bin`` file and prints a summary of its
 contents: file header, station count, coordinate range, grid
 dimensions, and reference quantities.
+
+--profiles-out option can be used to export all station profiles to a
+Tecplot ASCII file for visualization and data inspection
 """
 
 # --------------------------------------------------
@@ -14,7 +17,6 @@ import logging
 from pathlib import Path
 from typing import Annotated
 
-import numpy as np
 import typer
 
 from lst_tools.data_io.lastrac_binary import LastracReader
@@ -44,7 +46,7 @@ def cmd_info(
 ) -> None:
     """Print summary information for a LASTRAC meanflow binary file."""
 
-    # validate that the file exists
+    # validate that the input file exists before opening the binary reader
     if not fpath.is_file():
         typer.echo(f"error: {fpath} not found", err=True)
         raise typer.Exit(1)
@@ -81,83 +83,62 @@ def cmd_info(
             profile_stream.write('TITLE = "meanflow_profiles"\n')
             profile_stream.write('VARIABLES = "s" "eta" "u" "v" "w" "T" "p"\n')
 
-        # read all station headers to collect summary data
-        s_values = np.empty(n_station, dtype=float)
-        n_eta_first = None
-        re1 = None
-        lref = None
-        stat_temp = None
-        stat_uvel = None
-        stat_dens = None
-        kappa_min = np.inf
-        kappa_max = -np.inf
-
-        for i in range(n_station):
+        # read and report each station independently because dimensions and
+        # reference quantities can vary through the meanflow file
+        for station_index in range(n_station):
             # read station header
             sh = fio.read_station_header()
+            n_eta = int(sh["n_eta"])
 
-            # store station coordinate
-            s_values[i] = sh["s"]
+            # read eta for station dimensions and bounds
+            eta = fio.read_station_vector(count=n_eta)
 
-            # capture values from first station
-            if i == 0:
-                n_eta_first = sh["n_eta"]
-                re1 = sh["re1"]
-                lref = sh["lref"]
-                stat_temp = sh["stat_temp"]
-                stat_uvel = sh["stat_uvel"]
-                stat_dens = sh["stat_dens"]
-
-            # track curvature range
-            kappa_min = min(kappa_min, sh["kappa"])
-            kappa_max = max(kappa_max, sh["kappa"])
-
-            # read or skip station vectors (eta, u, v, w, temp, pres)
+            # read or skip the remaining station vectors (u, v, w, temp, pres)
             if profile_stream is None:
-                fio.skip_records(6)
+                fio.skip_records(5)
             else:
-                n_eta = int(sh["n_eta"])
-                eta = fio.read_station_vector(count=n_eta)
                 uvel = fio.read_station_vector(count=n_eta)
                 vvel = fio.read_station_vector(count=n_eta)
                 wvel = fio.read_station_vector(count=n_eta)
                 temp = fio.read_station_vector(count=n_eta)
                 pres = fio.read_station_vector(count=n_eta)
 
-                zone_name = f"station_{i:04d}_iloc_{int(sh['i_loc']):04d}_s_{float(sh['s']):.6e}"
+                zone_name = (
+                    f"station_{station_index:04d}_"
+                    f"iloc_{int(sh['i_loc']):04d}_"
+                    f"s_{float(sh['s']):.6e}"
+                )
                 profile_stream.write(
                     f'ZONE T="{zone_name}", I={n_eta}, DATAPACKING=POINT\n'
                 )
 
-                for j in range(n_eta):
+                for eta_index in range(n_eta):
                     profile_stream.write(
                         f"{float(sh['s']):.8e} "
-                        f"{eta[j]:.8e} "
-                        f"{uvel[j]:.8e} "
-                        f"{vvel[j]:.8e} "
-                        f"{wvel[j]:.8e} "
-                        f"{temp[j]:.8e} "
-                        f"{pres[j]:.8e}\n"
+                        f"{eta[eta_index]:.8e} "
+                        f"{uvel[eta_index]:.8e} "
+                        f"{vvel[eta_index]:.8e} "
+                        f"{wvel[eta_index]:.8e} "
+                        f"{temp[eta_index]:.8e} "
+                        f"{pres[eta_index]:.8e}\n"
                     )
 
-        # print station summary
-        typer.echo("")
-        typer.echo("station summary")
-        typer.echo(f"n_eta:      {n_eta_first}")
-        typer.echo(f"s_min:      {s_values.min():.6e}")
-        typer.echo(f"s_max:      {s_values.max():.6e}")
-        typer.echo(f"s_first:    {s_values[0]:.6e}")
-        typer.echo(f"s_last:     {s_values[-1]:.6e}")
-        typer.echo(f"kappa:      [{kappa_min:.6e}, {kappa_max:.6e}]")
-
-        # print reference quantities
-        typer.echo("")
-        typer.echo("reference quantities")
-        typer.echo(f"lref:       {lref:.6e}")
-        typer.echo(f"re1:        {re1:.6e}")
-        typer.echo(f"stat_temp:  {stat_temp:.6e}")
-        typer.echo(f"stat_uvel:  {stat_uvel:.6e}")
-        typer.echo(f"stat_dens:  {stat_dens:.6e}")
+            # print station-specific dimensions, geometry, and references
+            typer.echo("")
+            typer.echo(f"station {station_index + 1}")
+            typer.echo(f"  i_loc:      {sh['i_loc']}")
+            typer.echo(f"  s:          {sh['s']:.6e}")
+            typer.echo(f"  eta_0:      {eta[0]:.6e}")
+            typer.echo(f"  eta_max:    {eta[-1]:.6e}")
+            typer.echo(f"  n_eta:      {n_eta}")
+            typer.echo(f"  kappa:      {sh['kappa']:.6e}")
+            typer.echo(f"  rloc:       {sh['rloc']:.6e}")
+            typer.echo(f"  drdx:       {sh['drdx']:.6e}")
+            typer.echo(f"  lref:       {sh['lref']:.6e}")
+            typer.echo(f"  re1:        {sh['re1']:.6e}")
+            typer.echo(f"  stat_temp:  {sh['stat_temp']:.6e}")
+            typer.echo(f"  stat_uvel:  {sh['stat_uvel']:.6e}")
+            typer.echo(f"  stat_dens:  {sh['stat_dens']:.6e}")
 
         # print export location when profile file was requested
         if profiles_out is not None:
