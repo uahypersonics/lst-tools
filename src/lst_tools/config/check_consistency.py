@@ -9,11 +9,11 @@ are returned as typed ``Issue`` objects split into errors and warnings.
 # load necessary modules
 # --------------------------------------------------
 from __future__ import annotations
+
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Iterable
-import logging
-
 
 # --------------------------------------------------
 # set up logger

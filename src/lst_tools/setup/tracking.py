@@ -17,11 +17,10 @@ from typing import Any, Mapping
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
+from lst_tools.config import write_config
 from lst_tools.convert import generate_lst_input_deck
 from lst_tools.data_io import read_tecplot_ascii
 from lst_tools.hpc import detect, hpc_configure, script_build
-
-from lst_tools.config import write_config
 
 from ._common import (
     read_baseflow_stations,

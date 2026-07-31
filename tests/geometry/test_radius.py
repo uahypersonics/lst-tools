@@ -2,14 +2,15 @@
 # test cases for local radius computation
 # --------------------------------------------------
 #
-import numpy as np
-import pytest
 from pathlib import Path
 
-from lst_tools.core import Grid
-from lst_tools.geometry.radius import radius
-from lst_tools.geometry.kinds import GeometryKind
+import numpy as np
+import pytest
+
 from lst_tools.config.schema import Config
+from lst_tools.core import Grid
+from lst_tools.geometry.kinds import GeometryKind
+from lst_tools.geometry.radius import radius
 
 
 class TestRadius:

@@ -14,7 +14,6 @@ import typer
 
 from lst_tools.setup._common import read_baseflow_profiles
 
-
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------

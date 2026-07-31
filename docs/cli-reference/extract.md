@@ -21,8 +21,10 @@ both surfaces are present.
 
 Output goes to `extracted_baseflow.hdf5` next to the input file by default.
 Set `hdf5_out`, `profiles_out`, `wall_out`, `n_eta`, `eta_max`,
-`eta_distribution`, and `eta_stretch` in `[extract]` when non-default values
-are needed.
+`eta_distribution`, `eta_stretch`, and `eta_wall_spacing` in `[extract]` when
+non-default values are needed. The default distribution is `tanh` with
+`eta_stretch = 2.0`. The `geometric` distribution requires an explicit
+`eta_wall_spacing` for the first off-wall interval.
 
 ```bash
 # minimal — no config required

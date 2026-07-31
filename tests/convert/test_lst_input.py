@@ -1,9 +1,11 @@
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
 import pytest
-from lst_tools.convert.lst_input import generate_lst_input_deck
+
 from lst_tools.config.schema import Config
+from lst_tools.convert.lst_input import generate_lst_input_deck
 
 
 def _complete_config(**overrides) -> Config:

@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
-from lst_tools.core.grid import Grid
+
 from lst_tools.core.flow import Flow
+from lst_tools.core.grid import Grid
 
 
 class TestFlow:

@@ -9,22 +9,24 @@ ASCII) meanflow file.
 # load necessary libraries
 # --------------------------------------------------
 from __future__ import annotations
+
 import logging
 from pathlib import Path
+
 import numpy as np
+
 from lst_tools.config import Config
-from lst_tools.core import Grid, Flow
+from lst_tools.core import Flow, Grid
+from lst_tools.data_io import LastracWriter
 from lst_tools.geometry import (
+    GeometryKind,
     curvature,
     curvilinear_coordinate,
-    surface_angle,
     radius,
-    GeometryKind,
+    surface_angle,
 )
-from lst_tools.data_io import LastracWriter
 from lst_tools.geometry.kinds import list_geometry_kinds
 from lst_tools.utils import progress
-
 
 # --------------------------------------------------
 # set up logger

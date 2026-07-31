@@ -11,9 +11,8 @@ from unittest.mock import patch
 import numpy as np
 from typer.testing import CliRunner
 
-from lst_tools.cli.cmd_visualize_meanflow import _visualize_meanflow
 from lst_tools.cli.app import cli
-
+from lst_tools.cli.cmd_visualize_meanflow import _visualize_meanflow
 
 runner = CliRunner()
 

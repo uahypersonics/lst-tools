@@ -9,8 +9,8 @@ from unittest.mock import patch
 import numpy as np
 from typer.testing import CliRunner
 
-from lst_tools.cli.cmd_lastrac import _load_with_cfd_io, _to_2d
 from lst_tools.cli.app import cli
+from lst_tools.cli.cmd_lastrac import _load_with_cfd_io, _to_2d
 from lst_tools.config.schema import Config
 
 runner = CliRunner()

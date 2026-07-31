@@ -7,7 +7,7 @@ rather than mocking the I/O layer.
 import numpy as np
 
 from lst_tools.data_io import LastracWriter
-from lst_tools.setup._common import read_baseflow_stations, read_baseflow_profiles
+from lst_tools.setup._common import read_baseflow_profiles, read_baseflow_stations
 
 
 # --------------------------------------------------

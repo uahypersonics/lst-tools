@@ -13,6 +13,7 @@ can be used as "only" selectors (e.g. ``do_maxima=True, do_volume=False``).
 # load necessary modules
 # --------------------------------------------------
 from __future__ import annotations
+
 import logging
 from pathlib import Path
 
@@ -20,10 +21,10 @@ import typer
 
 from lst_tools.config import Config
 from lst_tools.utils.progress import progress
+
 from ._discover import discover_pattern_dirs
 from .maxima import extract_maxima
 from .volume import assemble_volume
-
 
 # --------------------------------------------------
 # set up logger

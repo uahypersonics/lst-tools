@@ -8,10 +8,10 @@ are ignored gracefully.
 # import necessary libraries
 # --------------------------------------------------
 from __future__ import annotations
-from pathlib import Path
+
 import logging
 import re
-
+from pathlib import Path
 
 # --------------------------------------------------
 # set up logger

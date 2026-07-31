@@ -1,4 +1,5 @@
 import sys
+
 import pytest
 
 
@@ -24,9 +25,9 @@ class TestLSTTools:
     def test_imports(self):
         """Test that all expected functions are imported correctly"""
         from lst_tools import (
-            read_flow_conditions,
             curvature,
             curvilinear_coordinate,
+            read_flow_conditions,
             surface_angle,
         )
 

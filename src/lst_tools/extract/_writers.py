@@ -5,14 +5,13 @@
 # --------------------------------------------------
 from __future__ import annotations
 
-from pathlib import Path
 import logging
+from pathlib import Path
 
 import h5py
 import numpy as np
 
 from ._types import SampledProfiles
-
 
 # --------------------------------------------------
 # set up logger

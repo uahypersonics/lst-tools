@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from lst_tools.hpc._parsers import (
     _most_common_int,
     coerce_time_to_hms,

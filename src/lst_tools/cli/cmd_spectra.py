@@ -14,7 +14,6 @@ import typer
 from lst_tools.config import read_config
 from lst_tools.setup.spectra import spectra_setup
 
-
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------

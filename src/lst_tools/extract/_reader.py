@@ -5,14 +5,13 @@
 # --------------------------------------------------
 from __future__ import annotations
 
-from pathlib import Path
-import re
 import logging
+import re
+from pathlib import Path
 
 import numpy as np
 
 from ._types import TecplotUnstructuredData
-
 
 # --------------------------------------------------
 # set up logger

@@ -16,12 +16,11 @@ Access config fields as attributes::
 # --------------------------------------------------
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
-import dataclasses
 from pathlib import Path
 from typing import Any
-
 
 # --------------------------------------------------
 # set up logger
@@ -745,9 +744,11 @@ class ExtractConfig(_ConfigBase):
     # optional absolute wall-normal profile extent in mesh length units
     eta_max: float | None = None
     # wall-normal point distribution name
-    eta_distribution: str | None = None
+    eta_distribution: str = "tanh"
     # stretching strength used by tanh eta distribution
-    eta_stretch: float = 3.0
+    eta_stretch: float = 2.0
+    # first off-wall interval used by geometric eta distribution
+    eta_wall_spacing: float | None = None
     # streamwise x-coordinates for profile extraction (None means use CLI default)
     stations: list[float] | None = None
     # range-based station specification: start x, end x, step [m].
@@ -801,9 +802,15 @@ class ExtractConfig(_ConfigBase):
         if "eta_distribution" in d and d["eta_distribution"] is not None:
             raw_distribution = str(d["eta_distribution"]).strip().lower()
             if raw_distribution:
-                if raw_distribution not in {"uniform", "cosine", "tanh"}:
+                if raw_distribution not in {
+                    "uniform",
+                    "cosine",
+                    "tanh",
+                    "geometric",
+                }:
                     raise ValueError(
-                        "extract.eta_distribution must be 'uniform', 'cosine', or 'tanh'"
+                        "extract.eta_distribution must be 'uniform', 'cosine', "
+                        "'tanh', or 'geometric'"
                     )
                 kw["eta_distribution"] = raw_distribution
 
@@ -813,6 +820,13 @@ class ExtractConfig(_ConfigBase):
             if raw_eta_stretch <= 0.0:
                 raise ValueError("extract.eta_stretch must be positive")
             kw["eta_stretch"] = raw_eta_stretch
+
+        # validate optional first interval for geometric spacing
+        if "eta_wall_spacing" in d and d["eta_wall_spacing"] not in (None, ""):
+            raw_eta_wall_spacing = float(d["eta_wall_spacing"])
+            if raw_eta_wall_spacing <= 0.0:
+                raise ValueError("extract.eta_wall_spacing must be positive")
+            kw["eta_wall_spacing"] = raw_eta_wall_spacing
 
         # validate stations list
         # treat empty string as unset — matches the pattern used by other optional fields

@@ -19,7 +19,6 @@ import typer
 
 from lst_tools.data_io.lastrac_binary import LastracReader
 
-
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------

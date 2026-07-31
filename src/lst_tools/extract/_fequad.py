@@ -9,27 +9,12 @@ working unchanged.
 # --------------------------------------------------
 # re-export public names for backward compatibility
 # --------------------------------------------------
-from ._types import (
-    InterpolationStencil,
-    QuadMeshSampler,
-    SampledProfiles,
-    TecplotUnstructuredData,
-)
-from ._reader import read_fequad_block_tecplot
-from ._wall import (
-    build_boundary_edges,
-    extract_body_wall,
-    extract_lower_wall,
-    order_boundary_loop,
-)
 from ._mesh import (
     build_quad_mesh_sampler,
     locate_interpolation_stencil,
     sample_fields_from_stencil,
 )
 from ._profile import (
-    DEFAULT_ETA_DISTRIBUTION,
-    N_ETA,
     build_eta_coordinates,
     build_station_normals,
     build_wall_branches,
@@ -37,12 +22,30 @@ from ._profile import (
     pick_wall_branch,
     sample_profiles,
 )
+from ._profile import (
+    default_eta_distribution as DEFAULT_ETA_DISTRIBUTION,
+)
+from ._profile import (
+    default_n_eta as N_ETA,
+)
+from ._reader import read_fequad_block_tecplot
+from ._types import (
+    InterpolationStencil,
+    QuadMeshSampler,
+    SampledProfiles,
+    TecplotUnstructuredData,
+)
+from ._wall import (
+    build_boundary_edges,
+    extract_body_wall,
+    extract_lower_wall,
+    order_boundary_loop,
+)
 from ._writers import (
     write_profiles_hdf5,
     write_profiles_tecplot,
     write_wall_profile_tecplot,
 )
-
 
 __all__ = [
     "InterpolationStencil",

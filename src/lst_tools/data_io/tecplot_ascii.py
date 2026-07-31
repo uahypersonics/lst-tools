@@ -4,13 +4,15 @@
 # import necessary modules
 # --------------------------------------------------
 from __future__ import annotations
-from dataclasses import dataclass, field
+
 import logging
 import re
-import numpy as np
+from dataclasses import dataclass, field
 from pathlib import Path
 from pprint import pformat
 from typing import Callable
+
+import numpy as np
 
 # --------------------------------------------------
 # set up logger

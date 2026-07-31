@@ -6,7 +6,7 @@ import pytest
 
 from lst_tools.hpc._detect import DetectedEnv
 from lst_tools.hpc._profiles import ClusterProfile, Scheduler
-from lst_tools.hpc._resolve import ResolvedJob, resolve, _select_account
+from lst_tools.hpc._resolve import ResolvedJob, _select_account, resolve
 
 
 # ------------------------------------------------------------------

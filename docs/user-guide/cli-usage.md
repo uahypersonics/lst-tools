@@ -50,8 +50,11 @@ lst-tools extract mesh.dat --station 0.10 --station 0.20 --station 0.30
 ```
 
 Station locations can also be set in `lst.cfg` under `[extract] stations`.
-Set `[extract] eta_max`, `eta_distribution`, and `eta_stretch` to control
-the wall-normal sampling grid. Freestream metadata is written directly from
+Set `[extract] eta_max`, `eta_distribution`, `eta_stretch`, and
+`eta_wall_spacing` to control the wall-normal sampling grid. The default is a
+`tanh` distribution with a stretching factor of `2.0`. Set
+`eta_distribution = "geometric"` and provide `eta_wall_spacing` to prescribe
+the first off-wall interval. Freestream metadata is written directly from
 `[flow_conditions]` into the HDF5 output.
 
 ## Setup Runs

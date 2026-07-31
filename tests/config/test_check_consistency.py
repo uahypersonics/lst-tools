@@ -1,8 +1,8 @@
 from lst_tools.config.check_consistency import (
-    check_consistency,
-    format_report,
     Issue,
     IssueLevel,
+    check_consistency,
+    format_report,
     get,
 )
 

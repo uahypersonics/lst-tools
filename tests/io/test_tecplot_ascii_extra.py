@@ -7,7 +7,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from lst_tools.data_io.tecplot_ascii import TecplotData, TecplotZone, read_tecplot_ascii, write_tecplot_ascii
+from lst_tools.data_io.tecplot_ascii import (
+    TecplotData,
+    TecplotZone,
+    read_tecplot_ascii,
+    write_tecplot_ascii,
+)
 
 
 class TestTecplotDataExtra:

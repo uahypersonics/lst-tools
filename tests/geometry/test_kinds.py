@@ -1,4 +1,5 @@
 import pytest
+
 from lst_tools.geometry.kinds import (
     GeometryKind,
     coerce_kind,

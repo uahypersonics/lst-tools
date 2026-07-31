@@ -16,8 +16,7 @@ from typing import Annotated, Optional
 import typer
 
 from lst_tools.config import read_config
-from lst_tools.hpc import script_build, hpc_configure
-
+from lst_tools.hpc import hpc_configure, script_build
 
 # --------------------------------------------------
 # set up logger

@@ -9,24 +9,26 @@ import logging
 
 import numpy as np
 
-from ._types import QuadMeshSampler, SampledProfiles
 from ._mesh import locate_interpolation_stencil, sample_fields_from_stencil
-
+from ._types import QuadMeshSampler, SampledProfiles
 
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------
 logger = logging.getLogger(__name__)
 
-# wall-normal grid size
-N_ETA = 200
-
-# default wall-normal point distribution
-# cosine clusters points near the wall, which is where the boundary-layer
-# gradients live; uniform spacing starves the near-wall region of points and
-# under-resolves the velocity and temperature profiles for stability analysis
-DEFAULT_ETA_DISTRIBUTION = "cosine"
-
+# --------------------------------------------------
+# set sensible defaults for profile extraction
+# --------------------------------------------------
+#
+# number of points along the wall-normal direction
+default_n_eta = 200
+#
+# default point distribution
+default_eta_distribution = "tanh"
+#
+# default stretching strength for the tanh distribution
+default_eta_stretch = 2.0
 
 # --------------------------------------------------
 # arc-length and station normals
@@ -50,7 +52,9 @@ def compute_wall_arc_length(wall_x: np.ndarray, wall_y: np.ndarray) -> np.ndarra
 
     return s
 
-
+# --------------------------------------------------
+# split the wall arc into lower and upper branches
+# --------------------------------------------------
 def build_wall_branches(
     wall_x: np.ndarray,
     wall_y: np.ndarray,
@@ -116,7 +120,9 @@ def build_wall_branches(
 
     return lower_x, lower_y, upper_x, upper_y
 
-
+# --------------------------------------------------
+# pick the wall branch that matches the requested surface side
+# --------------------------------------------------
 def pick_wall_branch(
     wall_x: np.ndarray,
     wall_y: np.ndarray,
@@ -172,12 +178,15 @@ def pick_wall_branch(
 
     return selected_x, selected_y
 
-
+# --------------------------------------------------
+# routine to generate eta coordinates for extraction
+# --------------------------------------------------
 def build_eta_coordinates(
     eta_max: float,
     n_eta: int,
-    distribution: str = DEFAULT_ETA_DISTRIBUTION,
-    eta_stretch: float = 3.0,
+    distribution: str = default_eta_distribution,
+    eta_stretch: float = default_eta_stretch,
+    eta_wall_spacing: float | None = None,
 ) -> np.ndarray:
     """Build the wall-normal sampling coordinates.
 
@@ -185,9 +194,11 @@ def build_eta_coordinates(
         eta_max: Maximum wall-normal distance.
         n_eta: Number of wall-normal sample points.
         distribution: Point distribution name. ``uniform`` uses equally spaced
-            points, ``cosine`` clusters points near the wall, and ``tanh``
-            applies stronger near-wall clustering controlled by ``eta_stretch``.
+            points, ``cosine`` clusters points near the wall, ``tanh`` applies
+            near-wall clustering controlled by ``eta_stretch``, and
+            ``geometric`` grows intervals from ``eta_wall_spacing``.
         eta_stretch: Stretching strength for ``tanh`` distribution.
+        eta_wall_spacing: First off-wall interval for ``geometric`` distribution.
 
     Returns:
         Wall-normal coordinate array from 0 to ``eta_max``.
@@ -216,8 +227,54 @@ def build_eta_coordinates(
     elif distribution == "tanh":
         # apply stronger near-wall clustering with tunable stretch strength
         eta = eta_max * (1.0 - np.tanh(eta_stretch * (1.0 - xi)) / np.tanh(eta_stretch))
+    elif distribution == "geometric":
+        # validate the requested first interval
+        if eta_wall_spacing is None or eta_wall_spacing <= 0.0:
+            raise ValueError(
+                "eta_wall_spacing must be positive for geometric distribution"
+            )
+
+        # require intervals to grow away from the wall rather than contract
+        n_intervals = n_eta - 1
+        uniform_spacing = eta_max / n_intervals
+        if eta_wall_spacing > uniform_spacing:
+            raise ValueError(
+                "eta_wall_spacing must not exceed eta_max / (n_eta - 1) "
+                "for geometric distribution"
+            )
+
+        # use uniform spacing for the limiting geometric ratio r = 1
+        if np.isclose(eta_wall_spacing, uniform_spacing):
+            eta = eta_max * xi
+        else:
+            # solve eta_max = deta_wall * sum(r**j) for the ratio r > 1
+            powers = np.arange(n_intervals, dtype=float)
+
+            def geometric_extent(ratio: float) -> float:
+                intervals = eta_wall_spacing * np.power(ratio, powers)
+                extent = float(np.sum(intervals))
+                return extent
+
+            ratio_lower = 1.0
+            ratio_upper = 2.0
+            while geometric_extent(ratio_upper) < eta_max:
+                ratio_upper *= 2.0
+
+            for _ in range(100):
+                ratio_midpoint = 0.5 * (ratio_lower + ratio_upper)
+                if geometric_extent(ratio_midpoint) < eta_max:
+                    ratio_lower = ratio_midpoint
+                else:
+                    ratio_upper = ratio_midpoint
+
+            stretch_ratio = 0.5 * (ratio_lower + ratio_upper)
+            intervals = eta_wall_spacing * np.power(stretch_ratio, powers)
+            eta = np.concatenate(([0.0], np.cumsum(intervals)))
+            eta[-1] = eta_max
     else:
-        raise ValueError("eta distribution must be 'uniform', 'cosine', or 'tanh'")
+        raise ValueError(
+            "eta distribution must be 'uniform', 'cosine', 'tanh', or 'geometric'"
+        )
 
     return eta
 
@@ -518,10 +575,11 @@ def sample_profiles(
     mesh_sampler: QuadMeshSampler,
     station_x: np.ndarray,
     target_y: float | None = None,
-    n_eta: int = N_ETA,
+    n_eta: int = default_n_eta,
     eta_max: float | None = None,
-    eta_distribution: str = DEFAULT_ETA_DISTRIBUTION,
-    eta_stretch: float = 3.0,
+    eta_distribution: str = default_eta_distribution,
+    eta_stretch: float = default_eta_stretch,
+    eta_wall_spacing: float | None = None,
     rgas: float = 287.15,
 ) -> SampledProfiles:
     """Sample wall-normal profiles using barycentric interpolation on the quad mesh.
@@ -538,6 +596,7 @@ def sample_profiles(
             an automatic estimate is computed from mesh geometry.
         eta_distribution: Point distribution along the wall-normal coordinate.
         eta_stretch: Stretching strength for ``tanh`` eta distribution.
+        eta_wall_spacing: First off-wall interval for ``geometric`` distribution.
         rgas: Specific gas constant (J/(kg·K)). Used for ideal-gas wall density.
 
     Returns:
@@ -590,6 +649,7 @@ def sample_profiles(
         n_eta,
         distribution=eta_distribution,
         eta_stretch=eta_stretch,
+        eta_wall_spacing=eta_wall_spacing,
     )
 
     # initialize output arrays: shape (n_stations, n_eta)

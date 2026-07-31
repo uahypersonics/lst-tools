@@ -56,6 +56,55 @@ class TestBuildEtaCoordinates:
         # compare first off-wall sample location
         assert eta_tanh[1] < eta_uniform[1]
 
+    def test_default_distribution_is_tanh_with_stretch_two(self) -> None:
+        """Default coordinates should use the documented tanh distribution."""
+        eta_default = build_eta_coordinates(eta_max=1.0, n_eta=11)
+        eta_expected = build_eta_coordinates(
+            eta_max=1.0,
+            n_eta=11,
+            distribution="tanh",
+            eta_stretch=2.0,
+        )
+
+        assert np.allclose(eta_default, eta_expected)
+
+    def test_geometric_distribution_uses_requested_wall_spacing(self) -> None:
+        """Geometric spacing should start at the requested size and grow."""
+        eta = build_eta_coordinates(
+            eta_max=1.0,
+            n_eta=6,
+            distribution="geometric",
+            eta_wall_spacing=0.05,
+        )
+
+        intervals = np.diff(eta)
+        ratios = intervals[1:] / intervals[:-1]
+
+        assert eta[0] == pytest.approx(0.0)
+        assert eta[-1] == pytest.approx(1.0)
+        assert intervals[0] == pytest.approx(0.05)
+        assert np.all(intervals > 0.0)
+        assert np.allclose(ratios, ratios[0])
+
+    def test_geometric_distribution_requires_wall_spacing(self) -> None:
+        """Geometric spacing should require an explicit first interval."""
+        with pytest.raises(ValueError, match="eta_wall_spacing must be positive"):
+            build_eta_coordinates(
+                eta_max=1.0,
+                n_eta=6,
+                distribution="geometric",
+            )
+
+    def test_geometric_distribution_rejects_wall_coarsening(self) -> None:
+        """The first interval cannot exceed uniform spacing."""
+        with pytest.raises(ValueError, match="must not exceed"):
+            build_eta_coordinates(
+                eta_max=1.0,
+                n_eta=6,
+                distribution="geometric",
+                eta_wall_spacing=0.25,
+            )
+
     def test_invalid_eta_max_raises(self) -> None:
         """Non-positive eta_max should fail."""
         with pytest.raises(ValueError, match="eta_max must be positive"):

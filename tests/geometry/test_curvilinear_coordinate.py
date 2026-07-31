@@ -1,6 +1,8 @@
+import os
+
 import numpy as np
 import pytest
-import os
+
 from lst_tools.geometry.curvilinear_coordinate import curvilinear_coordinate
 
 

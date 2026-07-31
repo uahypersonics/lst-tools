@@ -1,9 +1,10 @@
-import pytest
 import os
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+
 import numpy as np
+import pytest
 
 from lst_tools.config.write_config import (
     _serialize_for_toml,

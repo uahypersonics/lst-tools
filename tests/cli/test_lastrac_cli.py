@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 

@@ -4,8 +4,9 @@
 #
 import numpy as np
 import pytest
-from lst_tools.geometry.surface_angle import surface_angle, _first_order, _second_order
+
 from lst_tools.core.grid import Grid
+from lst_tools.geometry.surface_angle import _first_order, _second_order, surface_angle
 
 
 @pytest.fixture

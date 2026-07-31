@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 
-import lst_tools
 import pytest
+
+import lst_tools
 
 
 def test_public_package_version_exists() -> None:

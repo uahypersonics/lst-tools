@@ -29,7 +29,6 @@ from .cmd_tracking_process import cmd_tracking_process
 from .cmd_visualize import cmd_visualize_parsing, cmd_visualize_tracking
 from .cmd_visualize_meanflow import cmd_visualize_meanflow
 
-
 cli = typer.Typer(
     name="lst-tools",
     help="lst-tools command-line interface",

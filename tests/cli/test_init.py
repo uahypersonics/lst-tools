@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import copy
 import re
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from lst_tools.config.schema import Config
-from lst_tools.config.geometry import GeometryPreset, GEOMETRY_TEMPLATES
-from lst_tools.config.merge import merge_dicts, merge_flow_defaults
-from lst_tools.cli.cmd_init import _inject_init_comments
 from lst_tools.cli.app import cli
+from lst_tools.cli.cmd_init import _inject_init_comments
+from lst_tools.config.geometry import GEOMETRY_TEMPLATES, GeometryPreset
+from lst_tools.config.merge import merge_dicts, merge_flow_defaults
+from lst_tools.config.schema import Config
 
 DEFAULTS = Config().to_dict()
 
@@ -139,7 +139,8 @@ class TestInitCommand:
         assert 'n_eta = 321' in config_text
         assert 'eta_distribution = "uniform"' in config_text
         assert 'eta_max = ""' in config_text
-        assert 'eta_stretch = 3.0' in config_text
+        assert 'eta_stretch = 2.0' in config_text
+        assert 'eta_wall_spacing = ""' in config_text
 
     @patch("lst_tools.cli.cmd_init.write_config", side_effect=Exception("Permission denied"))
     def test_init_write_config_exception(self, mock_write_config, tmp_path):

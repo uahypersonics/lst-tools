@@ -1,11 +1,13 @@
-import pytest
-import numpy as np
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from lst_tools.core import Grid, Flow
-from lst_tools.geometry.kinds import GeometryKind
-from lst_tools.convert.lastrac import convert_meanflow
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
+
 from lst_tools.config.schema import Config
+from lst_tools.convert.lastrac import convert_meanflow
+from lst_tools.core import Flow, Grid
+from lst_tools.geometry.kinds import GeometryKind
 
 
 class TestConvertMeanflow:

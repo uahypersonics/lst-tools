@@ -14,7 +14,6 @@ import pytest
 from lst_tools.config.schema import Config
 from lst_tools.setup.parsing import auto_fill_parsing, estimate_freq, parsing_setup
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

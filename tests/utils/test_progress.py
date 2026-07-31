@@ -1,5 +1,6 @@
-from unittest.mock import patch, MagicMock
-from lst_tools.utils.progress import progress, _RichCtx
+from unittest.mock import MagicMock, patch
+
+from lst_tools.utils.progress import _RichCtx, progress
 
 
 class TestProgress:

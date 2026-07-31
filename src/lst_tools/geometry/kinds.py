@@ -8,10 +8,10 @@ parameters each geometry kind requires.
 # load necessary modules
 # --------------------------------------------------
 from __future__ import annotations
-from enum import IntEnum
-import logging
-from typing import Mapping
 
+import logging
+from enum import IntEnum
+from typing import Mapping
 
 # --------------------------------------------------
 # set up logger

@@ -16,7 +16,6 @@ from typing import Any
 from ._detect import detect
 from ._resolve import ResolvedJob, resolve
 
-
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------

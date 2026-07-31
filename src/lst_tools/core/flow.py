@@ -3,12 +3,13 @@
 # --------------------------------------------------
 # load necessary libraries
 # --------------------------------------------------
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import Mapping
-import numpy as np
-from .grid import Grid
 
+import numpy as np
+
+from .grid import Grid
 
 # --------------------------------------------------
 # set up logger

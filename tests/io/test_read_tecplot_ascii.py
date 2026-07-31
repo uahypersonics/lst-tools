@@ -1,16 +1,18 @@
-import numpy as np
-import pytest
 import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
+import numpy as np
+import pytest
+
 from lst_tools.data_io.tecplot_ascii import (
-    read_tecplot_ascii,
     TecplotData,
     TecplotZone,
     _normalize,
     _parse_variables_block,
     _parse_zone_header,
+    read_tecplot_ascii,
 )
 
 

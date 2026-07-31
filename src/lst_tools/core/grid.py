@@ -4,11 +4,12 @@
 # load necessary libraries
 # --------------------------------------------------
 from __future__ import annotations
-from dataclasses import dataclass
-import logging
-from typing import Any, Mapping
-import numpy as np
 
+import logging
+from dataclasses import dataclass
+from typing import Any, Mapping
+
+import numpy as np
 
 # --------------------------------------------------
 # set up logger

@@ -1,6 +1,7 @@
 import os
 import sys
-from lst_tools.data_io.read_flow_conditions import read_flow_conditions, _first_number
+
+from lst_tools.data_io.read_flow_conditions import _first_number, read_flow_conditions
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + "/../")
 

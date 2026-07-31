@@ -15,7 +15,6 @@ import typer
 from lst_tools.config import find_config, read_config
 from lst_tools.setup.parsing import parsing_setup
 
-
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------

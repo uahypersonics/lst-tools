@@ -8,11 +8,12 @@ the fixed-format text file that LASTRAC reads as ``input.dat``.
 # load necessary libraries
 # --------------------------------------------------
 from __future__ import annotations
+
 import logging
 from pathlib import Path
 from pprint import pformat
-from lst_tools.config.schema import Config
 
+from lst_tools.config.schema import Config
 
 # --------------------------------------------------
 # set up logger

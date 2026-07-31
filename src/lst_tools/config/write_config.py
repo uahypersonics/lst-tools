@@ -7,12 +7,13 @@ Serialises a config dictionary into a TOML file on disk.
 # load necessary modules
 # --------------------------------------------------
 from __future__ import annotations
+
+import logging
 from pathlib import Path
 from typing import Any
-import logging
-import tomli_w as toml_w
-import numpy as np
 
+import numpy as np
+import tomli_w as toml_w
 
 # --------------------------------------------------
 # set up logger

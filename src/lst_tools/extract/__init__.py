@@ -2,10 +2,10 @@
 
 from ._fequad import (
     SampledProfiles,
-    extract_lower_wall,
     build_quad_mesh_sampler,
-    sample_profiles,
+    extract_lower_wall,
     read_fequad_block_tecplot,
+    sample_profiles,
     write_profiles_hdf5,
     write_profiles_tecplot,
     write_wall_profile_tecplot,

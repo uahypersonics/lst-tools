@@ -11,7 +11,6 @@ import numpy as np
 
 from ._types import InterpolationStencil, QuadMeshSampler
 
-
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------

@@ -18,11 +18,12 @@ import re
 from pathlib import Path
 
 import numpy as np
-from scipy.interpolate import interp1d
 import typer
+from scipy.interpolate import interp1d
 
 from lst_tools.data_io import read_tecplot_ascii, write_tecplot_ascii
 from lst_tools.utils.progress import progress
+
 from ._discover import discover_pattern_dirs
 
 # --------------------------------------------------

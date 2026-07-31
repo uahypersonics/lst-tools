@@ -5,8 +5,8 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from lst_tools.config.schema import Config
-from lst_tools.hpc.configure import hpc_configure
 from lst_tools.hpc._resolve import ResolvedJob
+from lst_tools.hpc.configure import hpc_configure
 
 
 def _job() -> ResolvedJob:

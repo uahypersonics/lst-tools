@@ -2,7 +2,7 @@
 
 from .check_consistency import check_consistency, format_report
 from .find_config import find_config
-from .geometry import GeometryPreset, GEOMETRY_TEMPLATES
+from .geometry import GEOMETRY_TEMPLATES, GeometryPreset
 from .merge import merge_dicts, merge_flow_defaults
 from .read_config import read_config
 from .schema import Config

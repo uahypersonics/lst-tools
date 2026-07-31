@@ -13,7 +13,6 @@ import numpy as np
 
 from lst_tools.core.grid import Grid
 
-
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------

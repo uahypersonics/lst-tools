@@ -17,13 +17,13 @@ from typing import Annotated, Optional
 
 import numpy as np
 import typer
-from cfd_io import StructuredGrid, read_file as cfd_read_file
+from cfd_io import StructuredGrid
+from cfd_io import read_file as cfd_read_file
 
 from lst_tools.config import read_config
 from lst_tools.convert import convert_meanflow
 from lst_tools.core import Flow, Grid
 from lst_tools.data_io.tecplot_ascii import write_tecplot_ascii
-
 
 # --------------------------------------------------
 # set up logger

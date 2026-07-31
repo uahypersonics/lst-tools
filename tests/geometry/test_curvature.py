@@ -1,20 +1,22 @@
 import builtins
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
-from unittest.mock import patch
+
+from lst_tools.core.grid import Grid
 
 # Import the functions to test
 from lst_tools.geometry.curvature import (
     curvature,
-    smooth_savgol,
     smooth_gaussian,
-    smooth_spline,
-    smooth_robust,
     smooth_kappa,
+    smooth_robust,
+    smooth_savgol,
+    smooth_spline,
 )
-from lst_tools.core.grid import Grid
 
 
 class TestCurvatureFunction:

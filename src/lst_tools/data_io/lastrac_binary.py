@@ -9,8 +9,8 @@ used by the LASTRAC mean-flow binary format:
 from __future__ import annotations
 
 import struct
-import numpy as np
 
+import numpy as np
 from cfd_io import FortranBinaryReader, FortranBinaryWriter
 
 

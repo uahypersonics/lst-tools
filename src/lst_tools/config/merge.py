@@ -8,9 +8,9 @@ from __future__ import annotations
 import copy
 import logging
 from pathlib import Path
-from lst_tools.config.schema import Config
-import lst_tools.data_io
 
+import lst_tools.data_io
+from lst_tools.config.schema import Config
 
 # --------------------------------------------------
 # set up logger

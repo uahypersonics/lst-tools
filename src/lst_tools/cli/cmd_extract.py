@@ -46,20 +46,17 @@ from lst_tools.extract import (
     write_wall_profile_tecplot,
 )
 from lst_tools.extract._normalize import detect_dimensional, normalize_profiles
-from lst_tools.extract._profile import DEFAULT_ETA_DISTRIBUTION, N_ETA
-
+from lst_tools.extract._profile import default_eta_distribution, default_n_eta
 
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------
 logger = logging.getLogger(__name__)
 
-
 # --------------------------------------------------
 # default station locations (used when no cfg or CLI stations are given)
 # --------------------------------------------------
 _DEFAULT_STATIONS = [0.0025, 0.005, 0.010, 0.015, 0.020, 0.025]
-
 
 # --------------------------------------------------
 # surface-side resolution
@@ -85,7 +82,6 @@ def _resolve_surface(cli_surface: str | None, cfg_surface: str | None) -> str:
     if cfg_surface is not None:
         return cfg_surface
     return "lower"
-
 
 # --------------------------------------------------
 # main function for the 'extract' cli command
@@ -115,18 +111,6 @@ def cmd_extract(
     ] = None,
 ) -> None:
     """Extract wall-normal profiles from a Tecplot FE-quadrilateral slice.
-\f
-
-    Workflow:
-
-    1. Load project config from ``lst.cfg`` (auto-discovered or ``--cfg``).
-    2. Resolve input file, output paths, and stations from
-       CLI flags → ``[extract]`` in cfg → built-in defaults.
-       Freestream metadata written only when mach and temp_inf are in ``[flow_conditions]``.
-    3. Parse the Tecplot BLOCK FE-quad file.
-    4. Identify the lower wall boundary and build the quad mesh sampler.
-    5. Sample wall-normal profiles along rays perpendicular to the wall.
-    6. Write HDF5 baseflow file and two Tecplot diagnostics.
 
     Parameters
     ----------
@@ -134,86 +118,92 @@ def cmd_extract(
         Positional input file argument. Overrides ``[extract] input_file`` in cfg.
     """
 
-    # resolve verbose diagnostics state from logger configuration
+    # check if verbose is enabled
     verbose = logging.getLogger("lst_tools").isEnabledFor(logging.DEBUG)
 
     try:
-        # load config (tolerates missing file; uses defaults)
+        # load config
         config = read_config(path=cfg)
+
+        # get the [extract] section of the config file
         ext_cfg = config.extract
+        # get the [flow_conditions] section of the config file
         fc_cfg = config.flow_conditions
 
-        # resolve input file
-        # priority: CLI positional > [extract] input_file in cfg
-        resolved_input: Path | None = input_file
-        if resolved_input is None and ext_cfg.input_file is not None:
-            resolved_input = Path(ext_cfg.input_file)
+        # get input file for extraction
+        fpath_inp: Path | None = input_file
+        if fpath_inp is None and ext_cfg.input_file is not None:
+            fpath_inp = Path(ext_cfg.input_file)
 
-        if resolved_input is None:
+        # if no input file is found extraction cannot be carried out -> print error and exit
+        if fpath_inp is None:
             typer.echo(
-                "error: input file required — pass it as an argument or set "
+                "error: input file required in config file"
                 "[extract] input_file in lst.cfg",
                 err=True,
             )
             raise typer.Exit(1)
 
-        if not resolved_input.exists():
-            typer.echo(f"error: input file not found: {resolved_input}", err=True)
+        # if input file is provided but does not exist -> print error and exit
+        if not fpath_inp.exists():
+            typer.echo(f"error: input file not found: {fpath_inp}", err=True)
             raise typer.Exit(1)
 
-        # resolve output paths from [extract] config or defaults next to input file
-        def _resolve_hdf5_out(cfg_val: str | None, default_name: str) -> Path:
-            if cfg_val is not None and cfg_val.strip() != "":
-                return Path(cfg_val)
-            return resolved_input.parent / default_name
-
-        resolved_hdf5 = _resolve_hdf5_out(ext_cfg.hdf5_out, "extracted_baseflow.hdf5")
+        # resolve HDF5 output path from config or default next to the input file
+        if ext_cfg.hdf5_out is not None and ext_cfg.hdf5_out.strip():
+            fpath_out = Path(ext_cfg.hdf5_out)
+        else:
+            fpath_out = fpath_inp.parent / "extracted_baseflow.hdf5"
 
         # optional outputs — default to extracted_profiles.dat; wall_out only written when
         # explicitly set in [extract] config
         resolved_profiles: Path = (
             Path(ext_cfg.profiles_out)
             if ext_cfg.profiles_out and ext_cfg.profiles_out.strip()
-            else resolved_input.parent / "extracted_profiles.dat"
+            else fpath_inp.parent / "extracted_profiles.dat"
         )
-        resolved_wall: Path | None = (
+        fpath_wall: Path | None = (
             Path(ext_cfg.wall_out)
             if ext_cfg.wall_out and ext_cfg.wall_out.strip()
             else None
         )
 
-        # resolve freestream conditions from [flow_conditions] config only
-        resolved_rgas: float = fc_cfg.rgas
+        # get freestream conditions from [flow_conditions] config only
+        rgas: float = fc_cfg.rgas
 
-        # resolve station x-coordinates
-        # priority: CLI --station > [extract] x_s/x_e/d_x range > [extract] stations list > built-in defaults
+        # get station x-coordinates
         if station:
-            resolved_stations = np.asarray(sorted(station), dtype=float)
+            stations = np.asarray(sorted(station), dtype=float)
         elif (
             ext_cfg.x_s is not None
             and ext_cfg.x_e is not None
             and ext_cfg.d_x is not None
         ):
             # generate stations from range specification
-            resolved_stations = np.arange(ext_cfg.x_s, ext_cfg.x_e + ext_cfg.d_x / 2.0, ext_cfg.d_x)
+            stations = np.arange(ext_cfg.x_s, ext_cfg.x_e + ext_cfg.d_x / 2.0, ext_cfg.d_x)
             logger.debug(
                 "stations from x_s/x_e/d_x: %.4g to %.4g step %.4g (%d stations)",
-                ext_cfg.x_s, ext_cfg.x_e, ext_cfg.d_x, len(resolved_stations),
+                ext_cfg.x_s, ext_cfg.x_e, ext_cfg.d_x, len(stations),
             )
         elif ext_cfg.stations is not None:
-            resolved_stations = np.asarray(ext_cfg.stations, dtype=float)
+            stations = np.asarray(ext_cfg.stations, dtype=float)
         else:
-            resolved_stations = np.asarray(_DEFAULT_STATIONS, dtype=float)
+            stations = np.asarray(_DEFAULT_STATIONS, dtype=float)
 
         # resolve wall-normal point count from [extract] config or built-in default
-        resolved_n_eta = ext_cfg.n_eta if ext_cfg.n_eta is not None else N_ETA
+        n_eta = ext_cfg.n_eta if ext_cfg.n_eta is not None else default_n_eta
 
         # resolve wall-normal point distribution from [extract] config or built-in default
-        resolved_eta_distribution = (
+        eta_distribution = (
             ext_cfg.eta_distribution if ext_cfg.eta_distribution is not None
-            else DEFAULT_ETA_DISTRIBUTION
+            else default_eta_distribution
         )
-        resolved_eta_distribution = resolved_eta_distribution.strip().lower()
+        eta_distribution = eta_distribution.strip().lower()
+
+        # resolve distribution-specific controls from [extract] config
+        eta_max = ext_cfg.eta_max
+        eta_stretch = ext_cfg.eta_stretch
+        eta_wall_spacing = ext_cfg.eta_wall_spacing
 
         # resolve requested surface side
         # priority: explicit CLI flag > [extract] surface in cfg > built-in default
@@ -226,16 +216,19 @@ def cmd_extract(
         target_y = 1.0 if surface_key == "upper" else -1.0
 
         # debug output for devs
-        logger.debug("input file: %s", resolved_input)
-        logger.debug("hdf5 out: %s", resolved_hdf5)
-        logger.debug("stations: %s", resolved_stations.tolist())
-        logger.debug("n_eta: %d", resolved_n_eta)
-        logger.debug("eta_distribution: %s", resolved_eta_distribution)
+        logger.debug("input file: %s", fpath_inp)
+        logger.debug("hdf5 out: %s", fpath_out)
+        logger.debug("stations: %s", stations.tolist())
+        logger.debug("n_eta: %d", n_eta)
+        logger.debug("eta_max: %s", eta_max)
+        logger.debug("eta_distribution: %s", eta_distribution)
+        logger.debug("eta_stretch: %s", eta_stretch)
+        logger.debug("eta_wall_spacing: %s", eta_wall_spacing)
         logger.debug("requested surface: %s", surface_key)
 
         # read the Tecplot FE-quad file
-        typer.echo(f"reading {resolved_input}")
-        dataset = read_fequad_block_tecplot(resolved_input)
+        typer.echo(f"reading {fpath_inp}")
+        dataset = read_fequad_block_tecplot(fpath_inp)
 
         n_cells = dataset.connectivity.shape[0]
         typer.echo(f"dataset: {dataset.nodal['x'].size} nodes, {n_cells} cells")
@@ -272,21 +265,24 @@ def cmd_extract(
         )
 
         # write the extracted wall curve diagnostic (only if configured)
-        if resolved_wall is not None:
-            write_wall_profile_tecplot(resolved_wall, wall_x, wall_y)
-            logger.debug("wall profile written: %s", resolved_wall)
+        if fpath_wall is not None:
+            write_wall_profile_tecplot(fpath_wall, wall_x, wall_y)
+            logger.debug("wall profile written: %s", fpath_wall)
 
         # sample wall-normal profiles
-        typer.echo(f"sampling {resolved_stations.size} profiles ({resolved_n_eta} points each)")
+        typer.echo(f"sampling {stations.size} profiles ({n_eta} points each)")
         raw_profiles = sample_profiles(
             wall_x,
             wall_y,
             mesh_sampler,
-            resolved_stations,
-            n_eta=resolved_n_eta,
-            eta_distribution=resolved_eta_distribution,
+            stations,
+            n_eta=n_eta,
+            eta_max=eta_max,
+            eta_distribution=eta_distribution,
+            eta_stretch=eta_stretch,
+            eta_wall_spacing=eta_wall_spacing,
             target_y=target_y,
-            rgas=resolved_rgas,
+            rgas=rgas,
         )
 
         # write freestream metadata directly from config values
@@ -342,18 +338,18 @@ def cmd_extract(
             logger.debug("non-dimensional profiles tecplot written: %s", nondim_profiles_path)
 
         # write HDF5 baseflow file
-        write_profiles_hdf5(resolved_hdf5, profiles_to_write, freestream_attrs)
+        write_profiles_hdf5(fpath_out, profiles_to_write, freestream_attrs)
 
         # determine the surface that was actually extracted (may differ from the
         # requested surface when pick_wall_branch auto-falls back on a one-sided mesh)
         actual_surface = "upper" if float(np.mean(raw_profiles.station_y)) > 0.0 else "lower"
 
         # print summary for the user
-        typer.echo(f"{resolved_input} -> {resolved_hdf5}")
+        typer.echo(f"{fpath_inp} -> {fpath_out}")
         typer.echo(f"  profiles (dimensional): {resolved_profiles}")
         if nondim_profiles_path is not None:
             typer.echo(f"  profiles (non-dim):     {nondim_profiles_path}")
-        typer.echo(f"  stations: {resolved_stations.size}")
+        typer.echo(f"  stations: {stations.size}")
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
         typer.echo(f"  surface: {actual_surface}")
 

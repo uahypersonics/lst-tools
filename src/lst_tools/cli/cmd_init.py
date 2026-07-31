@@ -20,10 +20,9 @@ from typing import Annotated, Optional
 import typer
 
 from lst_tools.config import write_config
-from lst_tools.config.geometry import GeometryPreset, GEOMETRY_TEMPLATES
+from lst_tools.config.geometry import GEOMETRY_TEMPLATES, GeometryPreset
 from lst_tools.config.merge import merge_dicts, merge_flow_defaults
 from lst_tools.config.schema import Config
-
 
 # --------------------------------------------------
 # set up logger
@@ -174,8 +173,9 @@ def _inject_init_comments(config_text: str) -> str:
         ('surface = ""', "surface to extract: lower or upper (default: lower)"),
         ('n_eta = ""', "number of wall-normal sample points (default: 200)"),
         ('eta_max = ""', "maximum wall-normal extent [m] (optional; auto-estimated if blank)"),
-        ('eta_distribution = ""', "point distribution: uniform, cosine, or tanh (default: cosine)"),
-        ('eta_stretch = 3.0', "tanh stretching strength (larger = more near-wall clustering)"),
+        ('eta_distribution = "tanh"', "point distribution: uniform, cosine, tanh, or geometric"),
+        ('eta_stretch = 2.0', "tanh stretching strength (larger = more near-wall clustering)"),
+        ('eta_wall_spacing = ""', "first off-wall interval [m] for geometric distribution"),
         ('stations = ""', "list of x-stations to extract; example: [0.1, 0.2, 0.3]"),
     ]
 

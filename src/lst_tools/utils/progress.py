@@ -5,7 +5,7 @@
 # --------------------------------------------------
 from __future__ import annotations
 
-from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
+from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 from rich.table import Column
 
 

@@ -1,7 +1,9 @@
 import os
 import struct
+
 import numpy as np
 import pytest
+
 from lst_tools.data_io.lastrac_binary import LastracWriter
 
 

@@ -1,13 +1,13 @@
+import os
 import sys
 import tempfile
-import os
+from unittest import mock
 
 import pytest
-from unittest import mock
 import tomli_w as toml_w
 
-from lst_tools.config.schema import Config
 from lst_tools.config.read_config import read_config
+from lst_tools.config.schema import Config
 
 DEFAULTS = Config()
 DEFAULTS_DICT = DEFAULTS.to_dict()
@@ -86,8 +86,9 @@ class TestReadConfig:
             "extract": {
                 "n_eta": 500,
                 "eta_max": 0.012,
-                "eta_distribution": "tanh",
-                "eta_stretch": 3.0,
+                "eta_distribution": "geometric",
+                "eta_stretch": 2.0,
+                "eta_wall_spacing": 1.0e-6,
             },
             "lst": {
                 "solver": {
@@ -146,8 +147,9 @@ class TestReadConfig:
             assert config.geometry.type == 3
             assert config.extract.n_eta == 500
             assert config.extract.eta_max == pytest.approx(0.012)
-            assert config.extract.eta_distribution == "tanh"
-            assert config.extract.eta_stretch == pytest.approx(3.0)
+            assert config.extract.eta_distribution == "geometric"
+            assert config.extract.eta_stretch == pytest.approx(2.0)
+            assert config.extract.eta_wall_spacing == pytest.approx(1.0e-6)
             assert config.lst.solver.is_simplified is True
             assert config.lst.params.ny == 150
             # alpha_0 is coerced from string "(0,0)" to complex

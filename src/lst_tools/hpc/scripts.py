@@ -15,7 +15,6 @@ from pathlib import Path
 from ._resolve import ResolvedJob
 from ._templates import render
 
-
 # --------------------------------------------------
 # set up logger
 # --------------------------------------------------
