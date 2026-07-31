@@ -170,7 +170,7 @@ def _inject_init_comments(config_text: str) -> str:
         ('hdf5_out = ""', "output HDF5 file path (default: extracted_baseflow.hdf5)"),
         ('profiles_out = ""', "output path for wall-normal profiles Tecplot ASCII file (optional)"),
         ('wall_out = ""', "output path for wall curve Tecplot ASCII file (optional)"),
-        ('surface = ""', "surface to extract: lower or upper (default: lower)"),
+        ('surface = ""', "surface to extract: lower or upper (required for two-sided meshes)"),
         ('n_eta = ""', "number of wall-normal sample points (default: 200)"),
         ('eta_max = ""', "maximum wall-normal extent [m] (optional; auto-estimated if blank)"),
         ('eta_distribution = "tanh"', "point distribution: uniform, cosine, tanh, or geometric"),

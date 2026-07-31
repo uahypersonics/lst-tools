@@ -54,36 +54,6 @@ from lst_tools.extract._profile import default_eta_distribution, default_n_eta
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------
-# default station locations (used when no cfg or CLI stations are given)
-# --------------------------------------------------
-_DEFAULT_STATIONS = [0.0025, 0.005, 0.010, 0.015, 0.020, 0.025]
-
-# --------------------------------------------------
-# surface-side resolution
-# --------------------------------------------------
-def _resolve_surface(cli_surface: str | None, cfg_surface: str | None) -> str:
-    """Resolve the requested surface side via a three-way fallback.
-
-    Priority: explicit CLI ``--surface`` flag > ``[extract] surface`` in cfg >
-    built-in ``"lower"`` default.  Using ``None`` as the CLI sentinel lets an
-    explicit ``--surface lower`` win over a config ``surface = "upper"`` instead
-    of being silently overridden.
-
-    Args:
-        cli_surface: Value from the ``--surface`` flag, or ``None`` if unset.
-        cfg_surface: Value from ``[extract] surface`` in cfg, or ``None`` if unset.
-
-    Returns:
-        The resolved surface string.
-    """
-
-    if cli_surface is not None:
-        return cli_surface
-    if cfg_surface is not None:
-        return cfg_surface
-    return "lower"
-
-# --------------------------------------------------
 # main function for the 'extract' cli command
 # --------------------------------------------------
 def cmd_extract(
@@ -188,7 +158,17 @@ def cmd_extract(
         elif ext_cfg.stations is not None:
             stations = np.asarray(ext_cfg.stations, dtype=float)
         else:
-            stations = np.asarray(_DEFAULT_STATIONS, dtype=float)
+            typer.echo(
+                "error: extraction stations required; pass --station or set "
+                "[extract] stations or x_s/x_e/d_x in lst.cfg",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        # reject empty station lists before entering the extraction pipeline
+        if stations.size == 0:
+            typer.echo("error: extraction station list cannot be empty", err=True)
+            raise typer.Exit(1)
 
         # resolve wall-normal point count from [extract] config or built-in default
         n_eta = ext_cfg.n_eta if ext_cfg.n_eta is not None else default_n_eta
@@ -205,15 +185,17 @@ def cmd_extract(
         eta_stretch = ext_cfg.eta_stretch
         eta_wall_spacing = ext_cfg.eta_wall_spacing
 
-        # resolve requested surface side
-        # priority: explicit CLI flag > [extract] surface in cfg > built-in default
-        resolved_surface = _resolve_surface(surface, ext_cfg.surface)
-
-        surface_key = resolved_surface.strip().lower()
-        if surface_key not in {"lower", "upper"}:
-            typer.echo("error: --surface must be 'lower' or 'upper'", err=True)
-            raise typer.Exit(1)
-        target_y = 1.0 if surface_key == "upper" else -1.0
+        # resolve requested surface side with the explicit CLI flag taking priority
+        surface_name = surface if surface is not None else ext_cfg.surface
+        if surface_name is None:
+            surface_key = "auto"
+            target_y = None
+        else:
+            surface_key = surface_name.strip().lower()
+            if surface_key not in {"lower", "upper"}:
+                typer.echo("error: --surface must be 'lower' or 'upper'", err=True)
+                raise typer.Exit(1)
+            target_y = 1.0 if surface_key == "upper" else -1.0
 
         # debug output for devs
         logger.debug("input file: %s", fpath_inp)

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from lst_tools.cli.cmd_extract import _resolve_surface
 from lst_tools.extract._profile import pick_wall_branch
 from lst_tools.extract._wall import extract_body_wall
 
@@ -92,6 +92,10 @@ def test_extract_body_wall_full_mesh() -> None:
     assert upper_pos or upper_neg
     assert not np.array_equal(np.sort(upper_y), np.sort(lower_y))
 
+    # omitted selection is ambiguous when both physical surfaces are present
+    with pytest.raises(ValueError, match="surface selection required"):
+        pick_wall_branch(wall_x, wall_y, target_y=None)
+
 
 def test_extract_body_wall_half_mesh() -> None:
     """Half-mesh (one-sided) falls back to |y|<tol and returns only wall nodes.
@@ -145,11 +149,7 @@ def test_extract_body_wall_half_mesh() -> None:
     assert np.isclose(wall_x.min(), 0.0, atol=1e-9)
     assert np.isclose(wall_x.max(), 1.0, atol=1e-9)
 
-
-def test_surface_sentinel_resolution() -> None:
-    """Three-way surface resolution: explicit CLI flag always wins over config."""
-
-    assert _resolve_surface(None, None) == "lower"
-    assert _resolve_surface(None, "upper") == "upper"
-    assert _resolve_surface("lower", "upper") == "lower"
-    assert _resolve_surface("upper", "lower") == "upper"
+    # omitted selection uses the only available branch on a one-sided mesh
+    auto_x, auto_y = pick_wall_branch(wall_x, wall_y, target_y=None)
+    assert np.array_equal(auto_x, np.sort(wall_x))
+    assert np.allclose(auto_y, 0.0)

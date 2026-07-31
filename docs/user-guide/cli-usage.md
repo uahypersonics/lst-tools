@@ -49,7 +49,9 @@ wall-normal profiles before running `lst.x`:
 lst-tools extract mesh.dat --station 0.10 --station 0.20 --station 0.30
 ```
 
-Station locations can also be set in `lst.cfg` under `[extract] stations`.
+At least one station is required. Station locations can also be set in
+`lst.cfg` under `[extract] stations` or with the complete `x_s`, `x_e`, and
+`d_x` range.
 Set `[extract] eta_max`, `eta_distribution`, `eta_stretch`, and
 `eta_wall_spacing` to control the wall-normal sampling grid. The default is a
 `tanh` distribution with a stretching factor of `2.0`. Set

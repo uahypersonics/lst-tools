@@ -19,6 +19,10 @@ Output path, station locations, and wall-normal resolution are read from
 `--surface` is auto-detected on one-sided meshes and only needs to be set when
 both surfaces are present.
 
+At least one extraction station is required. Pass one or more `--station`
+options, set `[extract] stations`, or provide the complete `x_s`, `x_e`, and
+`d_x` range in `lst.cfg`.
+
 Output goes to `extracted_baseflow.hdf5` next to the input file by default.
 Set `hdf5_out`, `profiles_out`, `wall_out`, `n_eta`, `eta_max`,
 `eta_distribution`, `eta_stretch`, and `eta_wall_spacing` in `[extract]` when

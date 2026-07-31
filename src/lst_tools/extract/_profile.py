@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------
 #
 # number of points along the wall-normal direction
-default_n_eta = 200
+default_n_eta = 400
 #
 # default point distribution
 default_eta_distribution = "tanh"
@@ -138,8 +138,8 @@ def pick_wall_branch(
         wall_x: Wall x-coordinates in arc order.
         wall_y: Wall y-coordinates in arc order.
         target_y: Optional preferred surface side. Positive selects the upper
-            branch, negative selects the lower branch, and ``None`` keeps the
-            previous lower-surface default for backward compatibility.
+            branch, negative selects the lower branch, and ``None`` selects the
+            only available branch on a one-sided wall.
 
     Returns:
         Selected wall branch as ``(branch_x, branch_y)`` sorted by increasing x.
@@ -148,33 +148,49 @@ def pick_wall_branch(
     # build the two physical branches of the body arc
     lower_x, lower_y, upper_x, upper_y = build_wall_branches(wall_x, wall_y)
 
-    # keep backward-compatible behavior when no surface preference is given
-    if target_y is None or target_y <= 0.0:
-        selected_x, selected_y = lower_x, lower_y
-        requested = "lower"
-        fallback_x, fallback_y = upper_x, upper_y
-        fallback = "upper"
-    else:
-        selected_x, selected_y = upper_x, upper_y
-        requested = "upper"
-        fallback_x, fallback_y = lower_x, lower_y
-        fallback = "lower"
+    lower_available = lower_x.size >= 2
+    upper_available = upper_x.size >= 2
 
-    # auto-fallback for one-sided meshes: if the requested branch is empty or
-    # degenerate, use the available branch and warn the user
-    if selected_x.size < 2 and fallback_x.size >= 2:
-        logger.warning(
-            "requested '%s' surface has only %d point(s) — "
-            "this appears to be a one-sided %s-surface mesh. "
-            "automatically using the '%s' surface. "
-            "pass --surface %s to suppress this warning.",
-            requested,
-            selected_x.size,
-            fallback,
-            fallback,
-            fallback,
-        )
-        return fallback_x, fallback_y
+    # auto-select only when the wall has one unambiguous physical branch
+    if target_y is None:
+        if lower_available and upper_available:
+            raise ValueError(
+                "surface selection required for two-sided wall; "
+                "set surface to 'lower' or 'upper'"
+            )
+        if lower_available:
+            selected_x, selected_y = lower_x, lower_y
+        elif upper_available:
+            selected_x, selected_y = upper_x, upper_y
+        else:
+            raise ValueError("wall does not contain a valid surface branch")
+    else:
+        if target_y <= 0.0:
+            selected_x, selected_y = lower_x, lower_y
+            requested = "lower"
+            fallback_x, fallback_y = upper_x, upper_y
+            fallback = "upper"
+        else:
+            selected_x, selected_y = upper_x, upper_y
+            requested = "upper"
+            fallback_x, fallback_y = lower_x, lower_y
+            fallback = "lower"
+
+        # auto-fallback for one-sided meshes: if the requested branch is empty or
+        # degenerate, use the available branch and warn the user
+        if selected_x.size < 2 and fallback_x.size >= 2:
+            logger.warning(
+                "requested '%s' surface has only %d point(s) — "
+                "this appears to be a one-sided %s-surface mesh. "
+                "automatically using the '%s' surface. "
+                "pass --surface %s to suppress this warning.",
+                requested,
+                selected_x.size,
+                fallback,
+                fallback,
+                fallback,
+            )
+            selected_x, selected_y = fallback_x, fallback_y
 
     return selected_x, selected_y
 
@@ -220,15 +236,16 @@ def build_eta_coordinates(
 
     # build the requested point distribution
     if distribution == "uniform":
+        # uniform distribution from 0 to eta_max
         eta = eta_max * xi
     elif distribution == "cosine":
-        # cluster points near the wall while keeping the outer edge included
+        # cosine distribution: clusters points near the wall with a half-cosine from 0 to pi/2 mapping to 0 to eta_max
         eta = eta_max * (1.0 - np.cos(0.5 * np.pi * xi))
     elif distribution == "tanh":
-        # apply stronger near-wall clustering with tunable stretch strength
+        # tanh distribution: clusters points near the wall with a hyperbolic tangent
         eta = eta_max * (1.0 - np.tanh(eta_stretch * (1.0 - xi)) / np.tanh(eta_stretch))
     elif distribution == "geometric":
-        # validate the requested first interval
+        # geometric distribution: first interval is eta_wall_spacing, subsequent intervals grow geometrically
         if eta_wall_spacing is None or eta_wall_spacing <= 0.0:
             raise ValueError(
                 "eta_wall_spacing must be positive for geometric distribution"
@@ -278,7 +295,9 @@ def build_eta_coordinates(
 
     return eta
 
-
+# --------------------------------------------------
+# compute wall normals at each station
+# --------------------------------------------------
 def build_station_normals(
     wall_x: np.ndarray,
     wall_y: np.ndarray,
@@ -394,7 +413,9 @@ def build_station_normals(
 
     return station_y, station_s, normal_x, normal_y, wall_s
 
-
+# --------------------------------------------------
+# compute the maximum wall-normal extent of the profile grid
+# --------------------------------------------------
 def compute_eta_max(
     cell_x: np.ndarray,
     cell_y: np.ndarray,
@@ -436,7 +457,6 @@ def compute_eta_max(
     # use the 95th percentile to avoid far-field corner cells skewing the range
     eta_max = float(np.quantile(wall_distance, 0.95))
     return eta_max
-
 
 # --------------------------------------------------
 # profile sampling
@@ -568,7 +588,9 @@ def _sample_one_station(
         rho_profile,
     )
 
-
+# --------------------------------------------------
+# sample profiles along multiple stations
+# --------------------------------------------------
 def sample_profiles(
     wall_x: np.ndarray,
     wall_y: np.ndarray,

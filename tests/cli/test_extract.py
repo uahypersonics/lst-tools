@@ -7,9 +7,44 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+import pytest
+import typer
 
 from lst_tools.cli.cmd_extract import cmd_extract
 from lst_tools.extract._types import SampledProfiles
+
+
+def test_cmd_extract_requires_stations(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Exit before mesh processing when no extraction stations are configured."""
+    # build a valid input path with no CLI or configuration stations
+    input_path = tmp_path / "slice.dat"
+    input_path.write_text("fixture", encoding="utf-8")
+    extract_config = SimpleNamespace(
+        input_file=None,
+        hdf5_out=None,
+        profiles_out=None,
+        wall_out=None,
+        stations=None,
+        x_s=None,
+        x_e=None,
+        d_x=None,
+    )
+    config = SimpleNamespace(
+        extract=extract_config,
+        flow_conditions=SimpleNamespace(rgas=287.15),
+    )
+
+    # execute and validate the station requirement
+    with patch("lst_tools.cli.cmd_extract.read_config", return_value=config):
+        with pytest.raises(typer.Exit) as exc:
+            cmd_extract(input_path)
+
+    assert exc.value.exit_code == 1
+    captured = capsys.readouterr()
+    assert "extraction stations required" in captured.err
 
 
 def test_cmd_extract_forwards_eta_controls(tmp_path: Path) -> None:
@@ -98,7 +133,7 @@ def test_cmd_extract_forwards_eta_controls(tmp_path: Path) -> None:
         patch("lst_tools.cli.cmd_extract.write_profiles_tecplot"),
         patch("lst_tools.cli.cmd_extract.write_profiles_hdf5"),
     ):
-        cmd_extract(input_path)
+        cmd_extract(input_path, surface="upper")
 
     # validate every profile-grid control at the CLI boundary
     sample_kwargs = sample_mock.call_args.kwargs
@@ -107,3 +142,4 @@ def test_cmd_extract_forwards_eta_controls(tmp_path: Path) -> None:
     assert sample_kwargs["eta_distribution"] == "geometric"
     assert sample_kwargs["eta_stretch"] == 2.0
     assert sample_kwargs["eta_wall_spacing"] == 1.0e-6
+    assert sample_kwargs["target_y"] == 1.0

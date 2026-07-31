@@ -13,7 +13,7 @@ Set extraction outputs, station locations, and wall-normal resolution for `lst-t
 | `eta_distribution` | `str` | `tanh` | Wall-normal point distribution: `uniform`, `cosine`, `tanh`, or `geometric` |
 | `eta_stretch` | `float` | `2.0` | Stretching strength for the `tanh` distribution |
 | `eta_wall_spacing` | `float` | — | First off-wall interval for the `geometric` distribution |
-| `stations` | `list[float]` | — | Streamwise x-coordinates for profile stations |
+| `stations` | `list[float]` | — | Required streamwise x-coordinates unless supplied by CLI or `x_s`/`x_e`/`d_x` |
 
 ```toml
 [extract]
