@@ -124,7 +124,6 @@ def convert_meanflow(
             "geometry type must be specified in configuration file (can be provided as id or name)"
         )
 
-
     # check if grid is body fitted
     is_body_fitted = cfg.geometry.is_body_fitted
 

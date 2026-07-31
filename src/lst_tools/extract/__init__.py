@@ -2,7 +2,6 @@
 
 from ._fequad import (
     SampledProfiles,
-    compute_freestream_attrs,
     extract_lower_wall,
     build_quad_mesh_sampler,
     sample_profiles,
@@ -15,7 +14,6 @@ from ._normalize import detect_dimensional, normalize_profiles
 
 __all__ = [
     "SampledProfiles",
-    "compute_freestream_attrs",
     "extract_lower_wall",
     "build_quad_mesh_sampler",
     "sample_profiles",

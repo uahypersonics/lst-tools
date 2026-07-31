@@ -18,17 +18,6 @@ from ._mesh import locate_interpolation_stencil, sample_fields_from_stencil
 # --------------------------------------------------
 logger = logging.getLogger(__name__)
 
-
-# --------------------------------------------------
-# constants
-# --------------------------------------------------
-
-# gas properties for air
-GAMMA = 1.4
-SUTHERLAND_T0 = 273.15
-SUTHERLAND_MU0 = 1.716e-5
-SUTHERLAND_S = 110.4
-
 # wall-normal grid size
 N_ETA = 200
 
@@ -173,7 +162,11 @@ def pick_wall_branch(
             "this appears to be a one-sided %s-surface mesh. "
             "automatically using the '%s' surface. "
             "pass --surface %s to suppress this warning.",
-            requested, selected_x.size, fallback, fallback, fallback,
+            requested,
+            selected_x.size,
+            fallback,
+            fallback,
+            fallback,
         )
         return fallback_x, fallback_y
 
@@ -184,6 +177,7 @@ def build_eta_coordinates(
     eta_max: float,
     n_eta: int,
     distribution: str = DEFAULT_ETA_DISTRIBUTION,
+    eta_stretch: float = 3.0,
 ) -> np.ndarray:
     """Build the wall-normal sampling coordinates.
 
@@ -191,7 +185,9 @@ def build_eta_coordinates(
         eta_max: Maximum wall-normal distance.
         n_eta: Number of wall-normal sample points.
         distribution: Point distribution name. ``uniform`` uses equally spaced
-            points and ``cosine`` clusters points near the wall.
+            points, ``cosine`` clusters points near the wall, and ``tanh``
+            applies stronger near-wall clustering controlled by ``eta_stretch``.
+        eta_stretch: Stretching strength for ``tanh`` distribution.
 
     Returns:
         Wall-normal coordinate array from 0 to ``eta_max``.
@@ -203,6 +199,10 @@ def build_eta_coordinates(
     # validate inputs
     if n_eta < 2:
         raise ValueError("n_eta must be at least 2")
+    if eta_max <= 0.0:
+        raise ValueError("eta_max must be positive")
+    if eta_stretch <= 0.0:
+        raise ValueError("eta_stretch must be positive")
 
     # build the normalized wall-normal coordinate
     xi = np.linspace(0.0, 1.0, n_eta)
@@ -213,10 +213,11 @@ def build_eta_coordinates(
     elif distribution == "cosine":
         # cluster points near the wall while keeping the outer edge included
         eta = eta_max * (1.0 - np.cos(0.5 * np.pi * xi))
+    elif distribution == "tanh":
+        # apply stronger near-wall clustering with tunable stretch strength
+        eta = eta_max * (1.0 - np.tanh(eta_stretch * (1.0 - xi)) / np.tanh(eta_stretch))
     else:
-        raise ValueError(
-            "eta distribution must be 'uniform' or 'cosine'"
-        )
+        raise ValueError("eta distribution must be 'uniform', 'cosine', or 'tanh'")
 
     return eta
 
@@ -448,9 +449,7 @@ def _sample_one_station(
             previous_cell_index = stencil.cell_index
             break
     else:
-        raise ValueError(
-            f"Could not locate any sample point for station x={x0:.6e}"
-        )
+        raise ValueError(f"Could not locate any sample point for station x={x0:.6e}")
 
     # sample from first_valid_idx onward
     for eta_index in range(first_valid_idx, n_eta):
@@ -520,7 +519,9 @@ def sample_profiles(
     station_x: np.ndarray,
     target_y: float | None = None,
     n_eta: int = N_ETA,
+    eta_max: float | None = None,
     eta_distribution: str = DEFAULT_ETA_DISTRIBUTION,
+    eta_stretch: float = 3.0,
     rgas: float = 287.15,
 ) -> SampledProfiles:
     """Sample wall-normal profiles using barycentric interpolation on the quad mesh.
@@ -533,7 +534,10 @@ def sample_profiles(
         target_y: Optional preferred wall branch. Positive chooses the upper
             surface and negative chooses the lower surface.
         n_eta: Number of wall-normal sample points per profile.
+        eta_max: Optional absolute wall-normal profile extent. When ``None``,
+            an automatic estimate is computed from mesh geometry.
         eta_distribution: Point distribution along the wall-normal coordinate.
+        eta_stretch: Stretching strength for ``tanh`` eta distribution.
         rgas: Specific gas constant (J/(kg·K)). Used for ideal-gas wall density.
 
     Returns:
@@ -569,18 +573,23 @@ def sample_profiles(
         body_centroid=body_centroid,
     )
 
-    # estimate the wall-normal profile extent from cell elevations
-    eta_max = compute_eta_max(
-        mesh_sampler.cell_x,
-        mesh_sampler.cell_y,
-        wall_x,
-        wall_y,
-        target_y=target_y,
-    )
+    # resolve wall-normal profile extent (explicit override or automatic estimate)
+    if eta_max is None:
+        eta_max_value = compute_eta_max(
+            mesh_sampler.cell_x,
+            mesh_sampler.cell_y,
+            wall_x,
+            wall_y,
+            target_y=target_y,
+        )
+    else:
+        eta_max_value = float(eta_max)
+
     eta = build_eta_coordinates(
-        eta_max,
+        eta_max_value,
         n_eta,
         distribution=eta_distribution,
+        eta_stretch=eta_stretch,
     )
 
     # initialize output arrays: shape (n_stations, n_eta)
@@ -646,54 +655,3 @@ def sample_profiles(
         pres=pres,
         rho=rho,
     )
-
-
-# --------------------------------------------------
-# freestream attributes
-# --------------------------------------------------
-def compute_freestream_attrs(
-    profiles: SampledProfiles,
-    mach: float,
-    t_inf: float,
-    rgas: float = 287.15,
-) -> dict[str, float]:
-    """Compute HDF5 root attributes from freestream conditions via Sutherland's law.
-
-    Args:
-        profiles: Sampled wall-normal profile data (used for edge-state pressure).
-        mach: Freestream Mach number.
-        t_inf: Freestream static temperature in Kelvin.
-        rgas: Specific gas constant (J/(kg·K)). Should match
-            ``[flow_conditions] rgas`` in ``lst.cfg``.
-
-    Returns:
-        Attribute dictionary with freestream metadata written as HDF5 root
-        attributes. Key names are read by ``convert_meanflow`` (lastrac subcommand).
-    """
-
-    # compute freestream pressure from the mean edge-state value
-    p_inf = float(np.mean(profiles.pres[:, -1]))
-
-    # compute freestream density from the ideal gas law
-    rho_inf = p_inf / (rgas * t_inf)
-
-    # compute freestream viscosity from Sutherland's law
-    mu_inf = (
-        SUTHERLAND_MU0
-        * (t_inf / SUTHERLAND_T0) ** 1.5
-        * (SUTHERLAND_T0 + SUTHERLAND_S)
-        / (t_inf + SUTHERLAND_S)
-    )
-
-    # build the attribute dictionary — key names matched by convert_meanflow
-    attrs = {
-        "mach number": mach,
-        "heat capacity ratio": GAMMA,
-        "prandtl number": 0.71,
-        "gas constant": rgas,
-        "static temperature": t_inf,
-        "static density": rho_inf,
-        "freestream viscosity": mu_inf,
-    }
-
-    return attrs

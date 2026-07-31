@@ -8,8 +8,8 @@ lastrac``.
 Output paths are resolved from ``[extract]`` in ``lst.cfg``,
 or default to ``extracted_baseflow.hdf5`` next to the input file.
 
-Freestream metadata (Mach, T_inf) is written to the HDF5 only when
-``[flow_conditions]`` provides both ``mach`` and ``temp_inf``.
+Freestream metadata is written directly from ``[flow_conditions]`` so the
+HDF5 carries the case values without a separate reconstruction step.
 
 Example ``lst.cfg`` snippet::
 
@@ -38,7 +38,6 @@ import typer
 from lst_tools.config import read_config
 from lst_tools.extract import (
     build_quad_mesh_sampler,
-    compute_freestream_attrs,
     extract_lower_wall,
     read_fequad_block_tecplot,
     sample_profiles,
@@ -184,20 +183,7 @@ def cmd_extract(
         )
 
         # resolve freestream conditions from [flow_conditions] config only
-        # skip freestream metadata if either value is missing
         resolved_rgas: float = fc_cfg.rgas
-        have_freestream = fc_cfg.mach is not None and fc_cfg.temp_inf is not None
-        if not have_freestream:
-            typer.echo("", err=True)
-            typer.echo(
-                typer.style(
-                    "WARNING: mach and temp_inf not set in [flow_conditions] --"
-                    " HDF5 freestream metadata will not be written.",
-                    fg=typer.colors.YELLOW, bold=True,
-                ),
-                err=True,
-            )
-            typer.echo("", err=True)
 
         # resolve station x-coordinates
         # priority: CLI --station > [extract] x_s/x_e/d_x range > [extract] stations list > built-in defaults
@@ -242,7 +228,6 @@ def cmd_extract(
         # debug output for devs
         logger.debug("input file: %s", resolved_input)
         logger.debug("hdf5 out: %s", resolved_hdf5)
-        logger.debug("freestream available: %s", have_freestream)
         logger.debug("stations: %s", resolved_stations.tolist())
         logger.debug("n_eta: %d", resolved_n_eta)
         logger.debug("eta_distribution: %s", resolved_eta_distribution)
@@ -304,12 +289,25 @@ def cmd_extract(
             rgas=resolved_rgas,
         )
 
-        # compute freestream attributes from config if both mach and temp_inf are set
-        freestream_attrs: dict = {}
-        if have_freestream:
-            freestream_attrs = compute_freestream_attrs(
-                raw_profiles, fc_cfg.mach, fc_cfg.temp_inf, rgas=resolved_rgas
-            )
+        # write freestream metadata directly from config values
+        freestream_attrs: dict[str, float] = {}
+        fc_attr_map = {
+            "mach number": fc_cfg.mach,
+            "heat capacity ratio": fc_cfg.gamma,
+            "prandtl number": fc_cfg.pr,
+            "gas constant": fc_cfg.rgas,
+            "reference length scale": config.geometry.l_ref,
+            "stagnation pressure": fc_cfg.pres_0,
+            "stagnation temperature": fc_cfg.temp_0,
+            "freestream pressure": fc_cfg.pres_inf,
+            "freestream temperature": fc_cfg.temp_inf,
+            "freestream density": fc_cfg.dens_inf,
+            "freestream velocity": fc_cfg.uvel_inf,
+            "viscosity law": fc_cfg.visc_law,
+        }
+        for attr_name, attr_value in fc_attr_map.items():
+            if attr_value is not None:
+                freestream_attrs[attr_name] = float(attr_value)
 
         # detect dimensional profiles and optionally normalize
         is_dimensional = detect_dimensional(raw_profiles)
@@ -328,13 +326,7 @@ def cmd_extract(
         profiles_to_write = raw_profiles
         nondim_profiles_path: Path | None = None
         if is_dimensional and ext_cfg.nondimensionalize:
-            profiles_to_write, edge_values = normalize_profiles(raw_profiles)
-            # store edge values as freestream attrs so downstream tools can reconstruct
-            freestream_attrs.update({
-                "uvel_edge": float(edge_values["uvel_e"].mean()),
-                "temp_edge": float(edge_values["temp_e"].mean()),
-                "rho_edge":  float(edge_values["rho_e"].mean()),
-            })
+            profiles_to_write, _ = normalize_profiles(raw_profiles)
             # path for the non-dimensional Tecplot output
             nondim_profiles_path = resolved_profiles.with_stem(
                 resolved_profiles.stem + "_nondimensional"
@@ -365,9 +357,11 @@ def cmd_extract(
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
         typer.echo(f"  surface: {actual_surface}")
 
-        if verbose and have_freestream:
-            typer.echo(f"  rho_inf: {freestream_attrs['static density']:.4e} kg/m^3")
-            typer.echo(f"  mu_inf:  {freestream_attrs['freestream viscosity']:.4e} Pa·s")
+        if verbose and freestream_attrs:
+            if "freestream density" in freestream_attrs:
+                typer.echo(f"  rho_inf: {freestream_attrs['freestream density']:.4e} kg/m^3")
+            if "freestream velocity" in freestream_attrs:
+                typer.echo(f"  u_inf:   {freestream_attrs['freestream velocity']:.4e} m/s")
 
     except typer.Exit:
         raise

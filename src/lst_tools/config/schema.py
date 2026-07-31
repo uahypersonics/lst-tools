@@ -742,8 +742,12 @@ class ExtractConfig(_ConfigBase):
     surface: str | None = None
     # wall-normal points per extracted profile
     n_eta: int | None = None
+    # optional absolute wall-normal profile extent in mesh length units
+    eta_max: float | None = None
     # wall-normal point distribution name
     eta_distribution: str | None = None
+    # stretching strength used by tanh eta distribution
+    eta_stretch: float = 3.0
     # streamwise x-coordinates for profile extraction (None means use CLI default)
     stations: list[float] | None = None
     # range-based station specification: start x, end x, step [m].
@@ -786,15 +790,29 @@ class ExtractConfig(_ConfigBase):
                 raise ValueError("extract.n_eta must be at least 2")
             kw["n_eta"] = raw_n_eta
 
+        # validate optional absolute wall-normal extent
+        if "eta_max" in d and d["eta_max"] not in (None, ""):
+            raw_eta_max = float(d["eta_max"])
+            if raw_eta_max <= 0.0:
+                raise ValueError("extract.eta_max must be positive")
+            kw["eta_max"] = raw_eta_max
+
         # validate wall-normal point distribution
         if "eta_distribution" in d and d["eta_distribution"] is not None:
             raw_distribution = str(d["eta_distribution"]).strip().lower()
             if raw_distribution:
-                if raw_distribution not in {"uniform", "cosine"}:
+                if raw_distribution not in {"uniform", "cosine", "tanh"}:
                     raise ValueError(
-                        "extract.eta_distribution must be 'uniform' or 'cosine'"
+                        "extract.eta_distribution must be 'uniform', 'cosine', or 'tanh'"
                     )
                 kw["eta_distribution"] = raw_distribution
+
+        # validate optional tanh stretching strength
+        if "eta_stretch" in d and d["eta_stretch"] not in (None, ""):
+            raw_eta_stretch = float(d["eta_stretch"])
+            if raw_eta_stretch <= 0.0:
+                raise ValueError("extract.eta_stretch must be positive")
+            kw["eta_stretch"] = raw_eta_stretch
 
         # validate stations list
         # treat empty string as unset — matches the pattern used by other optional fields

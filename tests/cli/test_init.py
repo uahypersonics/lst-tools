@@ -72,7 +72,7 @@ class TestInitHelp:
         result = runner.invoke(cli, ["init", "--help"])
         assert result.exit_code == 0
         plain = _ANSI_RE.sub("", result.output)
-        for opt in ("--out", "--force", "--flow", "--geometry"):
+        for opt in ("--out", "--force", "--merge", "--flow", "--geometry"):
             assert opt in plain
 
 
@@ -110,6 +110,36 @@ class TestInitCommand:
         result = runner.invoke(cli, ["init", "--out", str(out_file)])
         assert result.exit_code == 0
         assert "already exists" in result.output
+
+    def test_init_merge_rewrites_existing_config_with_new_defaults(self, tmp_path, monkeypatch):
+        """Merge should preserve existing values while infusing new scaffold keys."""
+        out_file = tmp_path / "lst.cfg"
+        out_file.write_text(
+            "input_file = \"legacy_baseflow.hdf5\"\n"
+            "lst_exe = \"legacy_lst.x\"\n\n"
+            "[flow_conditions]\n"
+            "mach = 5.5\n"
+            "pr = 0.88\n\n"
+            "[extract]\n"
+            "n_eta = 321\n"
+            "eta_distribution = \"uniform\"\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(cli, ["init", "--out", str(out_file), "--merge"])
+
+        assert result.exit_code == 0
+
+        config_text = out_file.read_text(encoding="utf-8")
+        assert 'input_file = "legacy_baseflow.hdf5"' in config_text
+        assert 'lst_exe = "legacy_lst.x"' in config_text
+        assert 'mach = 5.5' in config_text
+        assert 'pr = 0.88' in config_text
+        assert 'n_eta = 321' in config_text
+        assert 'eta_distribution = "uniform"' in config_text
+        assert 'eta_max = ""' in config_text
+        assert 'eta_stretch = 3.0' in config_text
 
     @patch("lst_tools.cli.cmd_init.write_config", side_effect=Exception("Permission denied"))
     def test_init_write_config_exception(self, mock_write_config, tmp_path):

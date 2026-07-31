@@ -83,6 +83,12 @@ class TestReadConfig:
                 "is_body_fitted": False,
             },
             "meanflow_conversion": {"i_s": 0, "i_e": 150, "d_i": 1, "set_v_zero": True},
+            "extract": {
+                "n_eta": 500,
+                "eta_max": 0.012,
+                "eta_distribution": "tanh",
+                "eta_stretch": 3.0,
+            },
             "lst": {
                 "solver": {
                     "type": 1,
@@ -138,6 +144,10 @@ class TestReadConfig:
             assert config.input_file == "mock.hdf5"
             assert config.flow_conditions.mach == 0.8
             assert config.geometry.type == 3
+            assert config.extract.n_eta == 500
+            assert config.extract.eta_max == pytest.approx(0.012)
+            assert config.extract.eta_distribution == "tanh"
+            assert config.extract.eta_stretch == pytest.approx(3.0)
             assert config.lst.solver.is_simplified is True
             assert config.lst.params.ny == 150
             # alpha_0 is coerced from string "(0,0)" to complex

@@ -34,6 +34,14 @@ def cmd_info(
         Path,
         typer.Argument(help="Path to a meanflow.bin file."),
     ],
+    profiles_out: Annotated[
+        Path | None,
+        typer.Option(
+            "--profiles-out",
+            "-o",
+            help="Optional Tecplot ASCII output for all meanflow profiles.",
+        ),
+    ] = None,
 ) -> None:
     """Print summary information for a LASTRAC meanflow binary file."""
 
@@ -41,6 +49,10 @@ def cmd_info(
     if not fpath.is_file():
         typer.echo(f"error: {fpath} not found", err=True)
         raise typer.Exit(1)
+
+    # default empty handles for robust cleanup in finally
+    fio = None
+    profile_stream = None
 
     try:
         # open the meanflow binary
@@ -61,6 +73,14 @@ def cmd_info(
         typer.echo(f"Pr:         {header['Pr']}")
         typer.echo(f"stat_pres:  {header['stat_pres']:.6e}")
         typer.echo(f"nsp:        {header['nsp']}")
+
+        # prepare optional Tecplot profile export
+        if profiles_out is not None:
+            # convert to Path object and ensure output directory exists
+            profiles_out.parent.mkdir(parents=True, exist_ok=True)
+            profile_stream = profiles_out.open("w", encoding="utf-8")
+            profile_stream.write('TITLE = "meanflow_profiles"\n')
+            profile_stream.write('VARIABLES = "s" "eta" "u" "v" "w" "T" "p"\n')
 
         # read all station headers to collect summary data
         s_values = np.empty(n_station, dtype=float)
@@ -93,11 +113,33 @@ def cmd_info(
             kappa_min = min(kappa_min, sh["kappa"])
             kappa_max = max(kappa_max, sh["kappa"])
 
-            # skip station vectors (eta, u, v, w, temp, pres)
-            fio.skip_records(6)
+            # read or skip station vectors (eta, u, v, w, temp, pres)
+            if profile_stream is None:
+                fio.skip_records(6)
+            else:
+                n_eta = int(sh["n_eta"])
+                eta = fio.read_station_vector(count=n_eta)
+                uvel = fio.read_station_vector(count=n_eta)
+                vvel = fio.read_station_vector(count=n_eta)
+                wvel = fio.read_station_vector(count=n_eta)
+                temp = fio.read_station_vector(count=n_eta)
+                pres = fio.read_station_vector(count=n_eta)
 
-        # close the file
-        fio.close()
+                zone_name = f"station_{i:04d}_iloc_{int(sh['i_loc']):04d}_s_{float(sh['s']):.6e}"
+                profile_stream.write(
+                    f'ZONE T="{zone_name}", I={n_eta}, DATAPACKING=POINT\n'
+                )
+
+                for j in range(n_eta):
+                    profile_stream.write(
+                        f"{float(sh['s']):.8e} "
+                        f"{eta[j]:.8e} "
+                        f"{uvel[j]:.8e} "
+                        f"{vvel[j]:.8e} "
+                        f"{wvel[j]:.8e} "
+                        f"{temp[j]:.8e} "
+                        f"{pres[j]:.8e}\n"
+                    )
 
         # print station summary
         typer.echo("")
@@ -118,9 +160,25 @@ def cmd_info(
         typer.echo(f"stat_uvel:  {stat_uvel:.6e}")
         typer.echo(f"stat_dens:  {stat_dens:.6e}")
 
+        # print export location when profile file was requested
+        if profiles_out is not None:
+            typer.echo("")
+            typer.echo(f"profiles_out: {profiles_out}")
+
     except typer.Exit:
         raise
     except Exception as e:
         typer.echo(f"error: {e}", err=True)
         logger.debug("info command failed", exc_info=True)
         raise typer.Exit(1)
+    finally:
+        try:
+            if profile_stream is not None:
+                profile_stream.close()
+        except Exception:
+            pass
+        try:
+            if fio is not None:
+                fio.close()
+        except Exception:
+            pass

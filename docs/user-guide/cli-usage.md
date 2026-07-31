@@ -21,6 +21,7 @@ lst-tools init --geometry cone
 ```
 
 Add `--flow flow_conditions.dat` when flow conditions are already available.
+Add `--merge` to preserve existing values when refreshing an `lst.cfg` scaffold.
 
 Prepare `meanflow.bin` for `lst.x`:
 
@@ -37,6 +38,8 @@ Inspect `meanflow.bin` when needed:
 lst-tools info meanflow.bin
 ```
 
+Add `--profiles-out profiles.dat` to write all station profiles as Tecplot ASCII.
+
 ## Extract Wall-Normal Profiles
 
 When the baseflow data is a CFD mesh file (Tecplot FE-quad format), extract
@@ -47,8 +50,9 @@ lst-tools extract mesh.dat --station 0.10 --station 0.20 --station 0.30
 ```
 
 Station locations can also be set in `lst.cfg` under `[extract] stations`.
-Set `mach` and `temp_inf` in `[flow_conditions]` to include freestream
-metadata in the HDF5 output.
+Set `[extract] eta_max`, `eta_distribution`, and `eta_stretch` to control
+the wall-normal sampling grid. Freestream metadata is written directly from
+`[flow_conditions]` into the HDF5 output.
 
 ## Setup Runs
 

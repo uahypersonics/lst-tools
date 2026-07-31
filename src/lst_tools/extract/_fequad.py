@@ -34,7 +34,6 @@ from ._profile import (
     build_station_normals,
     build_wall_branches,
     compute_eta_max,
-    compute_freestream_attrs,
     pick_wall_branch,
     sample_profiles,
 )
@@ -64,7 +63,6 @@ __all__ = [
     "build_station_normals",
     "build_wall_branches",
     "compute_eta_max",
-    "compute_freestream_attrs",
     "pick_wall_branch",
     "sample_profiles",
     "write_profiles_hdf5",

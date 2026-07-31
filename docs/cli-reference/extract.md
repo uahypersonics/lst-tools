@@ -4,8 +4,8 @@ Extract wall-normal profiles from a Tecplot FE-quad mesh at user-specified
 streamwise stations.
 
 Output path, station locations, and wall-normal resolution are read from
-`[extract]` in `lst.cfg`. Freestream metadata (Mach, T_inf) is written to the
-HDF5 only when `[flow_conditions]` provides both `mach` and `temp_inf`.
+`[extract]` in `lst.cfg`. Freestream metadata is written directly from
+`[flow_conditions]` into the HDF5 root attributes.
 
 ## Options
 
@@ -20,8 +20,9 @@ HDF5 only when `[flow_conditions]` provides both `mach` and `temp_inf`.
 both surfaces are present.
 
 Output goes to `extracted_baseflow.hdf5` next to the input file by default.
-Set `hdf5_out`, `profiles_out`, `wall_out`, `n_eta`, and `eta_distribution` in
-`[extract]` when non-default values are needed.
+Set `hdf5_out`, `profiles_out`, `wall_out`, `n_eta`, `eta_max`,
+`eta_distribution`, and `eta_stretch` in `[extract]` when non-default values
+are needed.
 
 ```bash
 # minimal — no config required

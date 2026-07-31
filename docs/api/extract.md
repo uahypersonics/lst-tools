@@ -36,13 +36,21 @@ from lst_tools.extract import sample_profiles
 
 ::: lst_tools.extract.sample_profiles
 
-### `compute_freestream_attrs`
+### `detect_dimensional`
 
 ```python
-from lst_tools.extract import compute_freestream_attrs
+from lst_tools.extract import detect_dimensional
 ```
 
-::: lst_tools.extract.compute_freestream_attrs
+::: lst_tools.extract.detect_dimensional
+
+### `normalize_profiles`
+
+```python
+from lst_tools.extract import normalize_profiles
+```
+
+::: lst_tools.extract.normalize_profiles
 
 ### `write_profiles_hdf5`
 

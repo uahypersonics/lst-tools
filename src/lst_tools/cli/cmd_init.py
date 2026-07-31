@@ -173,7 +173,9 @@ def _inject_init_comments(config_text: str) -> str:
         ('wall_out = ""', "output path for wall curve Tecplot ASCII file (optional)"),
         ('surface = ""', "surface to extract: lower or upper (default: lower)"),
         ('n_eta = ""', "number of wall-normal sample points (default: 200)"),
-        ('eta_distribution = ""', "point distribution: cosine or linear (default: cosine)"),
+        ('eta_max = ""', "maximum wall-normal extent [m] (optional; auto-estimated if blank)"),
+        ('eta_distribution = ""', "point distribution: uniform, cosine, or tanh (default: cosine)"),
+        ('eta_stretch = 3.0', "tanh stretching strength (larger = more near-wall clustering)"),
         ('stations = ""', "list of x-stations to extract; example: [0.1, 0.2, 0.3]"),
     ]
 
@@ -311,6 +313,13 @@ def cmd_init(
     force: Annotated[
         bool, typer.Option("--force", "-f", help="Overwrite if file exists.")
     ] = False,
+    merge: Annotated[
+        bool,
+        typer.Option(
+            "--merge",
+            help="Merge an existing config at --out into the new scaffold.",
+        ),
+    ] = False,
     geometry: Annotated[
         Optional[GeometryPreset],
         typer.Option(
@@ -332,7 +341,10 @@ def cmd_init(
     2. If ``--geometry`` is given, overlay the matching geometry preset.
     3. If a ``flow_conditions.dat`` is found (or provided via ``--flow``),
        merge recognised flow-condition keys into the seed.
-    4. Write the final dict to *out* as TOML.
+     4. If ``--merge`` is set and *out* already exists, overlay the existing
+         config values on top of the scaffold so new keys are infused while old
+         values are preserved.
+     5. Write the final dict to *out* as TOML.
 
     Parameters
     ----------
@@ -346,6 +358,8 @@ def cmd_init(
         Explicit path to a ``flow_conditions.dat`` file.  When a geometry
         preset is selected and *flow_path* is not given, the current directory
         is searched for ``flow_conditions.dat`` automatically.
+    merge : bool
+        Merge the existing config at *out* into the generated scaffold.
     """
 
     # coerce flow_path to a Path (default: flow_conditions.dat in cwd)
@@ -365,6 +379,12 @@ def cmd_init(
     # merge flow conditions into the default config (from --flow path or auto-discovered flow_conditions.dat)
     cfg_init = merge_flow_defaults(default_cfg, flow_path)
 
+    # if requested, merge the existing output config back into the scaffold
+    # current config values win; missing keys stay on the generated scaffold
+    if merge and out.exists():
+        existing_cfg = Config.from_toml(out)
+        cfg_init = merge_dicts(cfg_init, existing_cfg.to_dict())
+
     # build a cleaner user-facing init scaffold
     cfg_init = _prepare_init_config(cfg_init)
 
@@ -375,8 +395,8 @@ def cmd_init(
         logger.info("auto-detected meanflow file: %s", h5_files[0].name)
 
     # overwrite guard:
-    # if the file already exists and --force is not set, do not overwrite
-    if out.exists() and not force:
+    # if the file already exists and neither --force nor --merge is set, do not overwrite
+    if out.exists() and not force and not merge:
         typer.echo(
             f"{out.resolve()} already exists; use --force to replace."
         )
