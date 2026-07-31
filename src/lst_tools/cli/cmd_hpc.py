@@ -34,17 +34,7 @@ def cmd_hpc(
         typer.Option("--cfg", "-c", help="Path to configuration file (e.g. lst.cfg)."),
     ] = None,
 ) -> None:
-    """Generate a runnable HPC job script.
-\f
-    Workflow:
-
-    1. Load the project config (auto-discovered or via ``--cfg``).
-    2. Resolve HPC scheduler settings (PBS / SLURM) with generous
-       defaults applied via ``hpc_configure()``.
-    3. Determine the LST executable (``cfg.lst_exe`` or ``lst.x``).
-    4. Write the run script to the current directory via
-       ``script_build()``.
-    """
+    """Generate a runnable HPC job script."""
 
     # load config
     try:

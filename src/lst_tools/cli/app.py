@@ -101,11 +101,7 @@ cli.add_typer(
 )
 
 # utility commands
-cli.command(
-    name="hpc",
-    rich_help_panel="Utilities",
-    help="Generate a runnable HPC job script.",
-)(cmd_hpc)
+cli.command(name="hpc",rich_help_panel="Utilities")(cmd_hpc)
 cli.command(name="info", rich_help_panel="Utilities")(cmd_info)
 cli.command(name="lastrac", rich_help_panel="Utilities")(cmd_lastrac)
 cli.command(name="extract", rich_help_panel="Utilities")(cmd_extract)
