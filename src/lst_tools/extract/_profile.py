@@ -30,6 +30,7 @@ default_eta_distribution = "tanh"
 # default stretching strength for the tanh distribution
 default_eta_stretch = 2.0
 
+
 # --------------------------------------------------
 # arc-length and station normals
 # --------------------------------------------------
@@ -51,6 +52,7 @@ def compute_wall_arc_length(wall_x: np.ndarray, wall_y: np.ndarray) -> np.ndarra
     s = np.concatenate(([0.0], np.cumsum(ds)))
 
     return s
+
 
 # --------------------------------------------------
 # split the wall arc into lower and upper branches
@@ -119,6 +121,7 @@ def build_wall_branches(
     upper_y = upper_y[upper_order]
 
     return lower_x, lower_y, upper_x, upper_y
+
 
 # --------------------------------------------------
 # pick the wall branch that matches the requested surface side
@@ -193,6 +196,7 @@ def pick_wall_branch(
             selected_x, selected_y = fallback_x, fallback_y
 
     return selected_x, selected_y
+
 
 # --------------------------------------------------
 # routine to generate eta coordinates for extraction
@@ -295,6 +299,7 @@ def build_eta_coordinates(
 
     return eta
 
+
 # --------------------------------------------------
 # compute wall normals at each station
 # --------------------------------------------------
@@ -335,27 +340,35 @@ def build_station_normals(
         body_centroid = (float(np.mean(wall_x)), float(np.mean(wall_y)))
     centroid_x, centroid_y = body_centroid
 
-    # for each station_x, find the wall point on the selected branch
+    # for each station_x, intersect the piecewise-linear wall branch
     station_y = np.zeros(station_x.size)
     station_s = np.zeros(station_x.size)
-    station_indices = np.zeros(station_x.size, dtype=int)
+    station_edge_indices = np.zeros(station_x.size, dtype=int)
 
     for i, sx in enumerate(station_x):
-        # find branch points closest to this x
-        x_dist = np.abs(branch_x - sx)
-        closest_idx = int(np.argmin(x_dist))
-        station_indices[i] = closest_idx
-        station_y[i] = branch_y[closest_idx]
-        station_s[i] = wall_s[closest_idx]
+        # find the wall edge whose x interval contains this station
+        edge_index = int(np.searchsorted(branch_x, sx, side="right") - 1)
+        edge_index = max(0, min(edge_index, branch_x.size - 2))
+        station_edge_indices[i] = edge_index
 
-    # differentiate the wall polyline with respect to arc length
-    edge_order = 2 if branch_x.size >= 3 else 1
-    tangent_x = np.gradient(branch_x, wall_s, edge_order=edge_order)
-    tangent_y = np.gradient(branch_y, wall_s, edge_order=edge_order)
+        # linearly interpolate the exact point and arc length on the FE wall edge
+        edge_fraction = (sx - branch_x[edge_index]) / (
+            branch_x[edge_index + 1] - branch_x[edge_index]
+        )
+        station_y[i] = branch_y[edge_index] + edge_fraction * (
+            branch_y[edge_index + 1] - branch_y[edge_index]
+        )
+        station_s[i] = wall_s[edge_index] + edge_fraction * (
+            wall_s[edge_index + 1] - wall_s[edge_index]
+        )
 
-    # get tangent at each station
-    station_tangent_x = tangent_x[station_indices]
-    station_tangent_y = tangent_y[station_indices]
+    # use the tangent of each intersected FE wall edge
+    station_tangent_x = (
+        branch_x[station_edge_indices + 1] - branch_x[station_edge_indices]
+    )
+    station_tangent_y = (
+        branch_y[station_edge_indices + 1] - branch_y[station_edge_indices]
+    )
 
     # normalize the tangent vectors
     tangent_norm = np.hypot(station_tangent_x, station_tangent_y)
@@ -369,7 +382,7 @@ def build_station_normals(
     # sign-correct to point away from body centroid (into the flow domain)
     for i in range(station_x.size):
         # vector from body centroid to station point
-        to_station_x = branch_x[station_indices[i]] - centroid_x
+        to_station_x = station_x[i] - centroid_x
         to_station_y = station_y[i] - centroid_y
 
         # check if normal points in same general direction as centroid-to-station
@@ -412,6 +425,7 @@ def build_station_normals(
     logger.debug("station normals: centroid=(%.4e, %.4e)", centroid_x, centroid_y)
 
     return station_y, station_s, normal_x, normal_y, wall_s
+
 
 # --------------------------------------------------
 # compute the maximum wall-normal extent of the profile grid
@@ -457,6 +471,7 @@ def compute_eta_max(
     # use the 95th percentile to avoid far-field corner cells skewing the range
     eta_max = float(np.quantile(wall_distance, 0.95))
     return eta_max
+
 
 # --------------------------------------------------
 # profile sampling
@@ -569,15 +584,6 @@ def _sample_one_station(
     v_profile[0] = 0.0
     w_profile[0] = 0.0
 
-    # use the first interior sample for the wall thermodynamic state
-    if n_eta > 1:
-        t_profile[0] = t_profile[1]
-        p_profile[0] = p_profile[1]
-        if t_profile[0] > 0:
-            rho_profile[0] = p_profile[0] / (rgas * t_profile[0])
-        else:
-            rho_profile[0] = rho_profile[1]
-
     # return the six sampled field profiles for this station
     return (
         u_profile,
@@ -587,6 +593,7 @@ def _sample_one_station(
         p_profile,
         rho_profile,
     )
+
 
 # --------------------------------------------------
 # sample profiles along multiple stations
