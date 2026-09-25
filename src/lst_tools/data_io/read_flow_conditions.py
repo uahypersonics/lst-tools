@@ -9,6 +9,7 @@ are ignored gracefully.
 # --------------------------------------------------
 from __future__ import annotations
 
+import json
 import logging
 import re
 from pathlib import Path
@@ -63,6 +64,60 @@ _KEY_MAP = {
 }
 
 
+# map flow-state JSON keys to lst.cfg flow-condition keys
+_JSON_KEY_MAP = {
+    "mach": "mach",
+    "re1": "re1",
+    "pr": "pr",
+    "gamma": "gamma",
+    "cp": "cp",
+    "cv": "cv",
+    "r_gas": "rgas",
+    "pres_stag": "pres_0",
+    "temp_stag": "temp_0",
+    "pres": "pres_inf",
+    "temp": "temp_inf",
+    "dens": "dens_inf",
+    "uvel": "uvel_inf",
+}
+
+
+# --------------------------------------------------
+# read flow-state JSON output
+# --------------------------------------------------
+def _read_flow_conditions_json(fpath: Path) -> dict[str, float]:
+    """Read flow-state JSON values and convert them to lst.cfg keys."""
+
+    # read the JSON document
+    with fpath.open("r", encoding="utf-8") as fhandle:
+        source_data = json.load(fhandle)
+
+    # extract numeric values from scalar or [value, unit] entries
+    flow_conditions: dict[str, float] = {}
+    for source_key, config_key in _JSON_KEY_MAP.items():
+        source_value = source_data.get(source_key)
+        if isinstance(source_value, (list, tuple)) and source_value:
+            source_value = source_value[0]
+
+        if isinstance(source_value, (int, float)) and not isinstance(source_value, bool):
+            flow_conditions[config_key] = float(source_value)
+
+    # map the transport model to the legacy viscosity-law switch
+    transport_model = source_data.get("transport_model")
+    if isinstance(transport_model, dict):
+        transport_type = transport_model.get("type")
+        viscosity_laws = {
+            "sutherland": 0,
+            "power": 1,
+            "power_law": 1,
+            "power-law": 1,
+        }
+        if transport_type in viscosity_laws:
+            flow_conditions["visc_law"] = viscosity_laws[transport_type]
+
+    return flow_conditions
+
+
 # --------------------------------------------------
 # find the first numerical entry in the line
 # --------------------------------------------------
@@ -108,6 +163,10 @@ def read_flow_conditions(fpath: str | Path) -> dict[str, float]:
 
     # ensure fpath is a Path object
     fpath = Path(fpath)
+
+    # read flow-state JSON files with their structured schema
+    if fpath.suffix.lower() == ".json":
+        return _read_flow_conditions_json(fpath)
 
     # generate an empty dictionary to return flow_conditions dict
     out_dict: dict[str, float] = {}

@@ -60,6 +60,81 @@ def _prepare_init_config(cfg_data: dict) -> dict:
 def _inject_init_comments(config_text: str) -> str:
     """Inject short guidance comments into the init-generated TOML text."""
 
+    # inject flow-condition comments by key because merged values vary
+    flow_field_comments = [
+        ("mach", "freestream mach number (required)"),
+        ("re1", "unit reynolds number (1/m) (required)"),
+        ("gamma", "ratio of specific heats"),
+        ("cp", "specific heat at constant pressure [J/(kg K)]"),
+        ("cv", "specific heat at constant volume [J/(kg K)]"),
+        ("rgas", "specific gas constant [J/(kg K)]"),
+        ("pres_0", "stagnation pressure [Pa] (optional)"),
+        ("temp_0", "stagnation temperature [K] (optional)"),
+        ("pres_inf", "freestream pressure [Pa] (optional)"),
+        ("temp_inf", "freestream temperature [K] (required)"),
+        ("dens_inf", "freestream density [kg/m^3] (optional)"),
+        ("uvel_inf", "freestream velocity [m/s] (optional)"),
+        ("visc_law", "viscosity law: 0 = Sutherland, 1 = power law"),
+    ]
+
+    # annotate the first matching field unless its comment is already present
+    for field_name, comment in flow_field_comments:
+        commented_field = rf"# {re.escape(comment)}\n{re.escape(field_name)} = "
+        if re.search(commented_field, config_text) is None:
+            config_text = re.sub(
+                rf"^({re.escape(field_name)} = .+)$",
+                rf"# {comment}\n\1",
+                config_text,
+                count=1,
+                flags=re.MULTILINE,
+            )
+
+    # inject geometry comments within [geometry] because keys such as type are reused
+    geometry_field_comments = [
+        (
+            "type",
+            "geometry type (required): 0=flat-plate, 1=cylinder, "
+            "2=cone, 3=generalized-axisymmetric (ogive, flared cone, ...)",
+        ),
+        (
+            "theta_deg",
+            "half-angle [deg] — cone and generalized-axisymmetric geometries",
+        ),
+        (
+            "r_nose",
+            "nose radius [m] — cone and generalized-axisymmetric geometries",
+        ),
+        ("l_ref", "reference length [m]"),
+        (
+            "is_body_fitted",
+            "cone only: true if grid is body-fitted "
+            "(radius = x·sin θ + r_nose·cos θ); false uses y-coordinate as radius",
+        ),
+    ]
+    geometry_match = re.search(
+        r"^\[geometry\]\n(?P<body>.*?)(?=^\[|\Z)",
+        config_text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if geometry_match is not None:
+        geometry_body = geometry_match.group("body")
+        for field_name, comment in geometry_field_comments:
+            commented_field = rf"# {re.escape(comment)}\n{re.escape(field_name)} = "
+            if re.search(commented_field, geometry_body) is None:
+                geometry_body = re.sub(
+                    rf"^({re.escape(field_name)} = .+)$",
+                    rf"# {comment}\n\1",
+                    geometry_body,
+                    count=1,
+                    flags=re.MULTILINE,
+                )
+
+        config_text = (
+            config_text[: geometry_match.start("body")]
+            + geometry_body
+            + config_text[geometry_match.end("body") :]
+        )
+
     # --------------------------------------------------
     # above-line field comments
     #
@@ -329,7 +404,12 @@ def cmd_init(
         ),
     ] = None,
     flow_path: Annotated[
-        Optional[Path], typer.Option("--flow", "-F", help="Path to flow_conditions.dat.")
+        Optional[Path],
+        typer.Option(
+            "--flow",
+            "-F",
+            help="Path to flow_conditions.dat or flow_conditions.json.",
+        ),
     ] = None,
 ) -> None:
     """Create a default lst.cfg configuration file.
@@ -339,7 +419,7 @@ def cmd_init(
 
     1. Start from schema defaults.
     2. If ``--geometry`` is given, overlay the matching geometry preset.
-    3. If a ``flow_conditions.dat`` is found (or provided via ``--flow``),
+    3. If flow conditions are found (or provided via ``--flow``),
        merge recognised flow-condition keys into the seed.
      4. If ``--merge`` is set and *out* already exists, overlay the existing
          config values on top of the scaffold so new keys are infused while old
@@ -355,7 +435,8 @@ def cmd_init(
     geometry : GeometryPreset | None
         Optional geometry preset to pre-populate the config.
     flow_path : Path | None
-        Explicit path to a ``flow_conditions.dat`` file.  When a geometry
+        Explicit path to a ``flow_conditions.dat`` or ``flow_conditions.json``
+        file.  When a geometry
         preset is selected and *flow_path* is not given, the current directory
         is searched for ``flow_conditions.dat`` automatically.
     merge : bool

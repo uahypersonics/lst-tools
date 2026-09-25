@@ -43,6 +43,45 @@ class TestMergeFlowDefaults:
         assert result["flow_conditions"]["mach"] == 5.2999999999999998
         assert "invalid_key" not in result["flow_conditions"]
 
+    def test_merge_flow_defaults_with_flow_state_json(self, tmp_path):
+        """Flow-state JSON values should populate the lst.cfg schema."""
+        flow_file = tmp_path / "flow_conditions.json"
+        flow_file.write_text(
+            """
+            {
+              "transport_model": {"type": "sutherland"},
+              "pres": [654.8743896484375, "Pa"],
+              "temp": [71.59325408935547, "K"],
+              "dens": [0.031854961421076244, "kg/m^3"],
+              "mach": [3.95, "-"],
+              "uvel": [670.1184496810956, "m/s"],
+              "re1": [4398841.682241216, "1/m"],
+              "cp": [1005.0250000000001, "J/(kg*K)"],
+              "cv": [717.8750000000001, "J/(kg*K)"],
+              "gamma": [1.4, "-"],
+              "r_gas": [287.15, "J/(kg*K)"],
+              "pr": [0.71, "-"],
+              "pres_stag": [92999.9513475091, "Pa"],
+              "temp_stag": [295.0000034751892, "K"]
+            }
+            """,
+            encoding="utf-8",
+        )
+
+        result = merge_flow_defaults(DEFAULTS, flow_file)
+        flow_conditions = result["flow_conditions"]
+
+        assert flow_conditions["mach"] == 3.95
+        assert flow_conditions["re1"] == 4398841.682241216
+        assert flow_conditions["pres_inf"] == 654.8743896484375
+        assert flow_conditions["temp_inf"] == 71.59325408935547
+        assert flow_conditions["dens_inf"] == 0.031854961421076244
+        assert flow_conditions["uvel_inf"] == 670.1184496810956
+        assert flow_conditions["pres_0"] == 92999.9513475091
+        assert flow_conditions["temp_0"] == 295.0000034751892
+        assert flow_conditions["rgas"] == 287.15
+        assert flow_conditions["visc_law"] == 0
+
     @patch("lst_tools.data_io.read_flow_conditions")
     def test_merge_flow_defaults_flow_read_exception(self, mock_read_flow, capsys):
         """Test that it handles exceptions when reading flow conditions file."""
@@ -219,6 +258,50 @@ class TestInitFormatting:
         assert "# Optional alpha-space gates for spectra post-processing." in updated_text
         assert "# Leave any bound empty to disable it." in updated_text
         assert updated_text.count("# Optional alpha-space gates for spectra post-processing.") == 1
+        assert updated_text_twice == updated_text
+
+    def test_inject_init_comments_annotates_populated_flow_values(self):
+        config_text = (
+            "[flow_conditions]\n"
+            "mach = 3.95\n"
+            "re1 = 4398841.682241216\n"
+            "pres_inf = 654.8743896484375\n"
+            "temp_inf = 71.59325408935547\n"
+            "visc_law = 0\n"
+        )
+
+        updated_text = _inject_init_comments(config_text)
+        updated_text_twice = _inject_init_comments(updated_text)
+
+        assert "# freestream mach number (required)\nmach = 3.95" in updated_text
+        assert "# unit reynolds number (1/m) (required)\nre1 = " in updated_text
+        assert "# freestream pressure [Pa] (optional)\npres_inf = " in updated_text
+        assert "# freestream temperature [K] (required)\ntemp_inf = " in updated_text
+        assert "# viscosity law: 0 = Sutherland, 1 = power law\nvisc_law = 0" in updated_text
+        assert updated_text_twice == updated_text
+
+    def test_inject_init_comments_annotates_populated_geometry_values(self):
+        config_text = (
+            "[geometry]\n"
+            "type = 2\n"
+            "theta_deg = 7.0\n"
+            "r_nose = 5e-05\n"
+            "l_ref = 1.0\n"
+            "is_body_fitted = true\n\n"
+            "[lst.solver]\n"
+            "type = 1\n"
+        )
+
+        updated_text = _inject_init_comments(config_text)
+        updated_text_twice = _inject_init_comments(updated_text)
+
+        assert "# geometry type (required): 0=flat-plate" in updated_text
+        assert "# half-angle [deg] — cone" in updated_text
+        assert "# nose radius [m] — cone" in updated_text
+        assert "# reference length [m]\nl_ref = 1.0" in updated_text
+        assert "# cone only: true if grid is body-fitted" in updated_text
+        assert updated_text.count("# geometry type (required): 0=flat-plate") == 1
+        assert "# solver type: 1=global parallel, 2=tracking, 3=3-D tracking" in updated_text
         assert updated_text_twice == updated_text
 
 

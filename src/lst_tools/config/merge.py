@@ -55,7 +55,7 @@ def merge_dicts(base: dict, override: dict) -> dict:
 # function to merge flow conditions into config defaults
 # --------------------------------------------------
 def merge_flow_defaults(cfg_in: dict, flow_path: Path | None) -> dict:
-    """Merge ``flow_conditions.dat`` values into *cfg_in* dictionary.
+    """Merge flow-condition file values into *cfg_in* dictionary.
 
     If *flow_path* exists, read it, keep only keys recognised by the
     config schema, and merge them into *cfg_in* via ``merge_dicts``.
@@ -63,7 +63,7 @@ def merge_flow_defaults(cfg_in: dict, flow_path: Path | None) -> dict:
 
     Args:
         cfg_in (dict): Base configuration dictionary.
-        flow_path (Path | None): Path to a ``flow_conditions.dat`` file.
+        flow_path (Path | None): Path to a flow-condition DAT or JSON file.
             If *None* or the file does not exist, *cfg_in* is returned unchanged.
 
     Returns:
