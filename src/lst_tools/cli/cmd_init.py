@@ -252,6 +252,14 @@ def _inject_init_comments(config_text: str) -> str:
         ('eta_stretch = 2.0', "tanh stretching strength (larger = more near-wall clustering)"),
         ('eta_wall_spacing = ""', "first off-wall interval [m] for geometric distribution"),
         ('stations = ""', "list of x-stations to extract; example: [0.1, 0.2, 0.3]"),
+        (
+            "snap_to_wall = false",
+            "snap requested x-stations to the nearest defined wall points",
+        ),
+        (
+            "all_wall_points = false",
+            "extract one profile at every unique x-point on the selected wall",
+        ),
     ]
 
     # apply each above-line comment once, guarding against double-injection

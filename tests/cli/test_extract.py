@@ -47,8 +47,8 @@ def test_cmd_extract_requires_stations(
     assert "extraction stations required" in captured.err
 
 
-def test_cmd_extract_forwards_eta_controls(tmp_path: Path) -> None:
-    """Forward all configured eta controls to the profile sampler."""
+def test_cmd_extract_forwards_eta_controls_with_all_wall_points(tmp_path: Path) -> None:
+    """Forward eta controls and allow all-wall mode without configured stations."""
     # build a minimal input path and extraction configuration
     input_path = tmp_path / "slice.dat"
     input_path.write_text("fixture", encoding="utf-8")
@@ -64,10 +64,12 @@ def test_cmd_extract_forwards_eta_controls(tmp_path: Path) -> None:
         eta_distribution="geometric",
         eta_stretch=2.0,
         eta_wall_spacing=1.0e-6,
-        stations=[0.1],
+        stations=None,
         x_s=None,
         x_e=None,
         d_x=None,
+        snap_to_wall=False,
+        all_wall_points=True,
         nondimensionalize=False,
     )
     flow_config = SimpleNamespace(
@@ -126,6 +128,10 @@ def test_cmd_extract_forwards_eta_controls(tmp_path: Path) -> None:
             return_value=(np.array([0.0, 1.0]), np.array([-0.1, -0.1])),
         ),
         patch(
+            "lst_tools.cli.cmd_extract.resolve_profile_stations",
+            return_value=np.array([0.1]),
+        ) as resolve_mock,
+        patch(
             "lst_tools.cli.cmd_extract.sample_profiles",
             return_value=profiles,
         ) as sample_mock,
@@ -143,3 +149,11 @@ def test_cmd_extract_forwards_eta_controls(tmp_path: Path) -> None:
     assert sample_kwargs["eta_stretch"] == 2.0
     assert sample_kwargs["eta_wall_spacing"] == 1.0e-6
     assert sample_kwargs["target_y"] == 1.0
+    np.testing.assert_allclose(sample_mock.call_args.args[3], np.array([0.1]))
+
+    # validate station-selection controls at the resolver boundary
+    resolve_kwargs = resolve_mock.call_args.kwargs
+    assert resolve_kwargs["target_y"] == 1.0
+    assert resolve_kwargs["snap_to_wall"] is False
+    assert resolve_kwargs["all_wall_points"] is True
+    assert resolve_mock.call_args.args[2] is None

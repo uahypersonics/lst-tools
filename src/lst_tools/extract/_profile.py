@@ -199,6 +199,57 @@ def pick_wall_branch(
 
 
 # --------------------------------------------------
+# resolve requested extraction stations against the selected wall branch
+# --------------------------------------------------
+def resolve_profile_stations(
+    wall_x: np.ndarray,
+    wall_y: np.ndarray,
+    requested_x: np.ndarray | None,
+    target_y: float | None,
+    snap_to_wall: bool = False,
+    all_wall_points: bool = False,
+) -> np.ndarray:
+    """Resolve profile x-coordinates for the requested station-selection mode.
+
+    Args:
+        wall_x: Wall x-coordinates in arc order.
+        wall_y: Wall y-coordinates in arc order.
+        requested_x: Explicit or range-generated x-coordinates. May be ``None``
+            only when ``all_wall_points`` is enabled.
+        target_y: Preferred surface side passed to :func:`pick_wall_branch`.
+        snap_to_wall: Snap each requested x-coordinate to its nearest wall node.
+        all_wall_points: Extract one profile at every node on the selected wall.
+
+    Returns:
+        Strictly increasing profile x-coordinates.
+
+    Raises:
+        ValueError: If no stations are available for the selected mode.
+    """
+
+    # select the same physical wall branch used by profile sampling
+    branch_x, _ = pick_wall_branch(wall_x, wall_y, target_y)
+
+    # use every defined wall point when requested
+    if all_wall_points:
+        stations = np.unique(branch_x)
+    elif requested_x is None or requested_x.size == 0:
+        raise ValueError("extraction station list cannot be empty")
+    elif snap_to_wall:
+        # map each requested location to its nearest defined wall point
+        nearest_indices = np.abs(branch_x[:, np.newaxis] - requested_x).argmin(axis=0)
+        stations = np.unique(branch_x[nearest_indices])
+    else:
+        # retain continuous x locations for wall-edge interpolation
+        stations = np.unique(np.asarray(requested_x, dtype=float))
+
+    if stations.size == 0:
+        raise ValueError("selected wall does not contain any profile stations")
+
+    return stations
+
+
+# --------------------------------------------------
 # routine to generate eta coordinates for extraction
 # --------------------------------------------------
 def build_eta_coordinates(

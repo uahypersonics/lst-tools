@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from lst_tools.extract._profile import pick_wall_branch
+from lst_tools.extract._profile import pick_wall_branch, resolve_profile_stations
 from lst_tools.extract._wall import extract_body_wall
 
 
@@ -153,3 +153,36 @@ def test_extract_body_wall_half_mesh() -> None:
     auto_x, auto_y = pick_wall_branch(wall_x, wall_y, target_y=None)
     assert np.array_equal(auto_x, np.sort(wall_x))
     assert np.allclose(auto_y, 0.0)
+
+
+def test_resolve_profile_stations_snaps_and_deduplicates() -> None:
+    """Requested x locations snap to unique nearest nodes on the selected wall."""
+    wall_x = np.array([1.0, 0.5, 0.0, 0.5, 1.0])
+    wall_y = np.array([-0.2, -0.1, 0.0, 0.1, 0.2])
+    requested_x = np.array([0.12, 0.48, 0.51, 0.91])
+
+    stations = resolve_profile_stations(
+        wall_x,
+        wall_y,
+        requested_x,
+        target_y=1.0,
+        snap_to_wall=True,
+    )
+
+    np.testing.assert_allclose(stations, np.array([0.0, 0.5, 1.0]))
+
+
+def test_resolve_profile_stations_uses_every_selected_wall_point() -> None:
+    """All-wall-points mode returns every node from only the selected branch."""
+    wall_x = np.array([1.0, 0.5, 0.0, 0.25, 0.75, 1.0])
+    wall_y = np.array([-0.2, -0.1, 0.0, 0.05, 0.15, 0.2])
+
+    stations = resolve_profile_stations(
+        wall_x,
+        wall_y,
+        requested_x=None,
+        target_y=1.0,
+        all_wall_points=True,
+    )
+
+    np.testing.assert_allclose(stations, np.array([0.0, 0.25, 0.75, 1.0]))

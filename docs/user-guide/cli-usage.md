@@ -49,9 +49,14 @@ wall-normal profiles before running `lst.x`:
 lst-tools extract mesh.dat --station 0.10 --station 0.20 --station 0.30
 ```
 
-At least one station is required. Station locations can also be set in
-`lst.cfg` under `[extract] stations` or with the complete `x_s`, `x_e`, and
-`d_x` range.
+Station locations can also be set in `lst.cfg` under `[extract] stations` or
+with the complete `x_s`, `x_e`, and `d_x` range. By default, profiles are
+interpolated at those exact x-coordinates. Use `--snap-to-wall` or set
+`snap_to_wall = true` to use the nearest defined wall points instead.
+
+Use `--all-wall-points` or set `all_wall_points = true` to extract one profile
+at every unique x-point on the selected wall branch without defining stations.
+This mode takes priority over explicit or range-based station coordinates.
 Set `[extract] eta_max`, `eta_distribution`, `eta_stretch`, and
 `eta_wall_spacing` to control the wall-normal sampling grid. The default is a
 `tanh` distribution with a stretching factor of `2.0`. Set

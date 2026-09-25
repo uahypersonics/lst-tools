@@ -40,6 +40,7 @@ from lst_tools.extract import (
     build_quad_mesh_sampler,
     extract_lower_wall,
     read_fequad_block_tecplot,
+    resolve_profile_stations,
     sample_profiles,
     write_profiles_hdf5,
     write_profiles_tecplot,
@@ -77,6 +78,20 @@ def cmd_extract(
         typer.Option(
             "--surface",
             help="Surface side to extract: lower or upper.",
+        ),
+    ] = None,
+    snap_to_wall: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--snap-to-wall/--no-snap-to-wall",
+            help="Snap requested x locations to the nearest defined wall points.",
+        ),
+    ] = None,
+    all_wall_points: Annotated[
+        Optional[bool],
+        typer.Option(
+            "--all-wall-points/--no-all-wall-points",
+            help="Extract one profile at every point on the selected wall.",
         ),
     ] = None,
 ) -> None:
@@ -141,32 +156,52 @@ def cmd_extract(
         # get freestream conditions from [flow_conditions] config only
         rgas: float = fc_cfg.rgas
 
-        # get station x-coordinates
+        # resolve station-selection modes with explicit CLI flags taking priority
+        use_snap_to_wall = (
+            snap_to_wall
+            if snap_to_wall is not None
+            else getattr(ext_cfg, "snap_to_wall", False)
+        )
+        use_all_wall_points = (
+            all_wall_points
+            if all_wall_points is not None
+            else getattr(ext_cfg, "all_wall_points", False)
+        )
+
+        # get requested station x-coordinates
+        requested_stations: np.ndarray | None = None
         if station:
-            stations = np.asarray(sorted(station), dtype=float)
+            requested_stations = np.asarray(sorted(station), dtype=float)
         elif (
             ext_cfg.x_s is not None
             and ext_cfg.x_e is not None
             and ext_cfg.d_x is not None
         ):
             # generate stations from range specification
-            stations = np.arange(ext_cfg.x_s, ext_cfg.x_e + ext_cfg.d_x / 2.0, ext_cfg.d_x)
+            requested_stations = np.arange(
+                ext_cfg.x_s,
+                ext_cfg.x_e + ext_cfg.d_x / 2.0,
+                ext_cfg.d_x,
+            )
             logger.debug(
                 "stations from x_s/x_e/d_x: %.4g to %.4g step %.4g (%d stations)",
-                ext_cfg.x_s, ext_cfg.x_e, ext_cfg.d_x, len(stations),
+                ext_cfg.x_s,
+                ext_cfg.x_e,
+                ext_cfg.d_x,
+                len(requested_stations),
             )
         elif ext_cfg.stations is not None:
-            stations = np.asarray(ext_cfg.stations, dtype=float)
-        else:
+            requested_stations = np.asarray(ext_cfg.stations, dtype=float)
+        elif not use_all_wall_points:
             typer.echo(
                 "error: extraction stations required; pass --station or set "
-                "[extract] stations or x_s/x_e/d_x in lst.cfg",
+                "[extract] stations, x_s/x_e/d_x, or all_wall_points in lst.cfg",
                 err=True,
             )
             raise typer.Exit(1)
 
         # reject empty station lists before entering the extraction pipeline
-        if stations.size == 0:
+        if requested_stations is not None and requested_stations.size == 0:
             typer.echo("error: extraction station list cannot be empty", err=True)
             raise typer.Exit(1)
 
@@ -200,7 +235,12 @@ def cmd_extract(
         # debug output for devs
         logger.debug("input file: %s", fpath_inp)
         logger.debug("hdf5 out: %s", fpath_out)
-        logger.debug("stations: %s", stations.tolist())
+        logger.debug(
+            "requested stations: %s",
+            None if requested_stations is None else requested_stations.tolist(),
+        )
+        logger.debug("snap to wall: %s", use_snap_to_wall)
+        logger.debug("all wall points: %s", use_all_wall_points)
         logger.debug("n_eta: %d", n_eta)
         logger.debug("eta_max: %s", eta_max)
         logger.debug("eta_distribution: %s", eta_distribution)
@@ -250,6 +290,16 @@ def cmd_extract(
         if fpath_wall is not None:
             write_wall_profile_tecplot(fpath_wall, wall_x, wall_y)
             logger.debug("wall profile written: %s", fpath_wall)
+
+        # resolve continuous, snapped, or all-wall-point station coordinates
+        stations = resolve_profile_stations(
+            wall_x,
+            wall_y,
+            requested_stations,
+            target_y=target_y,
+            snap_to_wall=use_snap_to_wall,
+            all_wall_points=use_all_wall_points,
+        )
 
         # sample wall-normal profiles
         typer.echo(f"sampling {stations.size} profiles ({n_eta} points each)")

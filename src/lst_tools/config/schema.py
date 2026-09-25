@@ -757,6 +757,10 @@ class ExtractConfig(_ConfigBase):
     x_s: float | None = None
     x_e: float | None = None
     d_x: float | None = None
+    # snap requested x-coordinates to the nearest defined wall points
+    snap_to_wall: bool = False
+    # extract one profile at every point on the selected wall branch
+    all_wall_points: bool = False
     # when True (default), divide profiles by their local edge values before
     # writing HDF5.  Set to False only when profiles are already non-dimensional.
     # a warning is issued when profiles appear dimensional but this flag is False.
@@ -846,6 +850,11 @@ class ExtractConfig(_ConfigBase):
                 if val <= 0.0:
                     raise ValueError(f"extract.{key} must be positive")
                 kw[key] = val
+
+        # validate station-selection flags
+        for key in ("snap_to_wall", "all_wall_points"):
+            if key in d:
+                kw[key] = _coerce_bool(d[key])
 
         # validate nondimensionalize flag
         if "nondimensionalize" in d:

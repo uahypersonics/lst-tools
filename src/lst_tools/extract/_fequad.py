@@ -20,6 +20,7 @@ from ._profile import (
     build_wall_branches,
     compute_eta_max,
     pick_wall_branch,
+    resolve_profile_stations,
     sample_profiles,
 )
 from ._profile import (
@@ -67,6 +68,7 @@ __all__ = [
     "build_wall_branches",
     "compute_eta_max",
     "pick_wall_branch",
+    "resolve_profile_stations",
     "sample_profiles",
     "write_profiles_hdf5",
     "write_profiles_tecplot",

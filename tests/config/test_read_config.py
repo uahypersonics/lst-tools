@@ -89,6 +89,8 @@ class TestReadConfig:
                 "eta_distribution": "geometric",
                 "eta_stretch": 2.0,
                 "eta_wall_spacing": 1.0e-6,
+                "snap_to_wall": True,
+                "all_wall_points": True,
             },
             "lst": {
                 "solver": {
@@ -150,6 +152,8 @@ class TestReadConfig:
             assert config.extract.eta_distribution == "geometric"
             assert config.extract.eta_stretch == pytest.approx(2.0)
             assert config.extract.eta_wall_spacing == pytest.approx(1.0e-6)
+            assert config.extract.snap_to_wall is True
+            assert config.extract.all_wall_points is True
             assert config.lst.solver.is_simplified is True
             assert config.lst.params.ny == 150
             # alpha_0 is coerced from string "(0,0)" to complex

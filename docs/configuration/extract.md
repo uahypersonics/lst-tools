@@ -14,6 +14,8 @@ Set extraction outputs, station locations, and wall-normal resolution for `lst-t
 | `eta_stretch` | `float` | `2.0` | Stretching strength for the `tanh` distribution |
 | `eta_wall_spacing` | `float` | — | First off-wall interval for the `geometric` distribution |
 | `stations` | `list[float]` | — | Required streamwise x-coordinates unless supplied by CLI or `x_s`/`x_e`/`d_x` |
+| `snap_to_wall` | `bool` | `false` | Snap requested x-coordinates to the nearest defined wall points |
+| `all_wall_points` | `bool` | `false` | Extract one profile at every unique x-point on the selected wall branch; overrides station coordinates |
 
 ```toml
 [extract]
@@ -27,7 +29,13 @@ eta_distribution = "tanh"
 eta_stretch = 2.0
 eta_wall_spacing = ""
 stations    = [0.10, 0.20, 0.30, 0.40, 0.50]
+snap_to_wall = true
+all_wall_points = false
 ```
+
+Leave `snap_to_wall = false` to interpolate profiles at the exact requested
+x-coordinates. To ignore `stations` and extract the complete selected wall,
+set `all_wall_points = true`.
 
 For geometric spacing, set `eta_wall_spacing` to the desired first interval.
 It must not exceed `eta_max / (n_eta - 1)` so intervals grow away from the wall.
