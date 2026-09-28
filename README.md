@@ -7,7 +7,7 @@ Pre- and post-processing toolkit for Linear Stability Theory (LST) analyses of h
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19271736.svg)](https://doi.org/10.5281/zenodo.19271736)
 [![PyPI](https://img.shields.io/pypi/v/lst-tools)](https://pypi.org/project/lst-tools/)
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://uahypersonics.github.io/lst-tools/)
-[![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-≥3.10-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
@@ -93,4 +93,5 @@ Recommended citation sources:
 
 ## License
 
-BSD-3-Clause. See [LICENSE](LICENSE) for details.
+GNU General Public License v3.0 or later. See [LICENSE](LICENSE) for the
+complete license terms.

@@ -1,4 +1,4 @@
-# BSD-3-Clause License - see LICENSE file
+# GPL-3.0-or-later - see LICENSE
 # PDF build overlay for MkDocs
 
 INHERIT: mkdocs.yml
@@ -23,5 +23,5 @@ plugins:
       output_path: pdf/lst-tools-documentation.pdf
       custom_template_path: templates
       author: Christoph Hader
-      copyright: BSD-3-Clause
+      copyright: GPL-3.0-or-later
       cover_subtitle: Linear Stability Theory Utilities
