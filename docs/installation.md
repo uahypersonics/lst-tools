@@ -37,7 +37,7 @@ For building the documentation locally:
 
 ```bash
 pip install -e ".[docs]"
-mkdocs serve
+zensical serve
 ```
 
 ## Verify Installation

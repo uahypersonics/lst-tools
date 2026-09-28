@@ -28,10 +28,8 @@ Issues = "https://github.com/uahypersonics/lst-tools/issues"
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "tqdm", "rich", "ruff"]
 docs = [
-  "mkdocs-material>=9.0",
+  "zensical",
   "mkdocstrings[python]>=0.24",
-  "mkdocs-bibtex>=2.0",
-  "mkdocs-with-pdf>=0.9",
 ]
 
 

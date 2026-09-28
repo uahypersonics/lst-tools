@@ -38,12 +38,6 @@ From here:
 - [CLI Usage](user-guide/cli-usage.md) shows the practical command-line workflow.
 - [API Usage](user-guide/api-usage.md) shows the equivalent Python workflow.
 
-## Offline Documentation
-
-Download the full documentation as PDF:
-
-[:material-file-pdf-box: Download](https://uahypersonics.github.io/lst-tools/pdf/lst-tools-documentation.pdf){ .md-button .md-button--primary }
-
 ## License
 
 GNU General Public License v3.0 or later. See
