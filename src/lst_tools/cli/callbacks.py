@@ -28,6 +28,14 @@ def version_callback(value: bool) -> bool:
 # --------------------------------------------------
 # configure package logging
 # --------------------------------------------------
+class _CurrentStderrHandler(logging.StreamHandler):
+    """Write to the active stderr stream, including redirected CLI sessions."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.stream = sys.stderr
+        super().emit(record)
+
+
 def _configure_console_logging(level: int) -> None:
     """Send package log messages at or above level to the current stderr."""
 
@@ -47,7 +55,7 @@ def _configure_console_logging(level: int) -> None:
             handler.stream = sys.stderr
         return
 
-    handler = logging.StreamHandler(sys.stderr)
+    handler = _CurrentStderrHandler()
     handler.setLevel(level)
     handler.setFormatter(logging.Formatter("[%(levelname)-7s] %(name)s: %(message)s"))
     lst_logger.addHandler(handler)

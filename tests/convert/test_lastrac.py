@@ -163,8 +163,9 @@ class TestConvertMeanflow:
             )
 
         assert "dimensional base flow detected" in caplog.text
-        assert "meanflow_conversion.nondimensionalize=true" in caplog.text
-        assert "flow_conditions.temp_inf, uvel_inf, and dens_inf" in caplog.text
+        assert "meanflow_conversion.nondimensionalize=false" in caplog.text
+        assert "meanflow.bin will retain dimensional velocity" in caplog.text
+        assert "lst code requires nondimensional inputs" in caplog.text
 
     def test_missing_config_raises_error(self, mock_grid, mock_flow):
         """Test that missing configuration raises ValueError."""

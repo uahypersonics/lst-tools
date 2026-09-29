@@ -47,8 +47,11 @@ Full documentation: https://uahypersonics.github.io/lst-tools
 
 ## Testing
 
+Run the ruff check and pytest check in the project root:
+
 ```bash
-pytest tests/ --cov --cov-report=term-missing -q
+ruff check
+pytest --cov
 ```
 
 ## Code Style
