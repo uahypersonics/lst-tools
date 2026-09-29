@@ -24,6 +24,7 @@ from .cmd_lastrac import cmd_lastrac
 from .cmd_parsing import cmd_parsing
 from .cmd_spectra import cmd_spectra
 from .cmd_spectra_process import cmd_spectra_process
+from .cmd_status import status_app
 from .cmd_tracking import cmd_tracking
 from .cmd_tracking_process import cmd_tracking_process
 from .cmd_visualize import cmd_visualize_parsing, cmd_visualize_tracking
@@ -98,6 +99,7 @@ cli.add_typer(
     rich_help_panel="Workflow",
     invoke_without_command=True,
 )
+cli.add_typer(status_app, name="status", rich_help_panel="Workflow")
 
 # utility commands
 cli.command(name="hpc",rich_help_panel="Utilities")(cmd_hpc)

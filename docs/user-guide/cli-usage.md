@@ -93,6 +93,17 @@ When an HPC scheduler is configured, the setup phase also writes scheduler
 scripts for generated decks and case directories. `lst-tools hpc` regenerates
 the run script for the current directory when needed.
 
+Check tracking runs from the directory containing the `kc_*` cases:
+
+```bash
+lst-tools status tracking
+lst-tools status tracking --all-issues
+```
+
+The first command summarizes cases and previews convergence issues with their
+station x-coordinate and frequency. The second lists every issue. Neither
+queries a scheduler or modifies the cases.
+
 ## Postprocessing and Cleanup
 
 After the tracking solves finish, process the results:

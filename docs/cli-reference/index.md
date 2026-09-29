@@ -101,6 +101,12 @@ Practical implications:
 | [tracking](process-tracking.md) | Post-process tracking results |
 | [spectra](process-spectra.md) | Post-process spectra results |
 
+### `lst-tools status`
+
+| Subcommand | Purpose |
+|---|---|
+| [tracking](status-tracking.md) | Inspect tracking run logs and convergence issues |
+
 ### `lst-tools visualize`
 
 | Subcommand | Purpose |
