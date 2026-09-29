@@ -1,6 +1,7 @@
 # `setup tracking`
 
 Set up tracking calculations, including directory structure and input decks.
+Each case directory and beta value is printed after its setup completes.
 
 Config values in `lst.cfg` provide the default tracking inputs. CLI options
 override those defaults for the current invocation.

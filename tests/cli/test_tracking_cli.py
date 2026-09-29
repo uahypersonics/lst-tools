@@ -30,6 +30,11 @@ class TestTrackingCLI:
     def test_run_without_verbose(self, mock_find_config, mock_read_config, mock_tracking_setup):
         mock_cfg = Config()
         mock_read_config.return_value = mock_cfg
+
+        def report_one_case(**kwargs):
+            kwargs["case_reporter"]("kc_0010pt00", 10.0)
+
+        mock_tracking_setup.side_effect = report_one_case
         result = runner.invoke(cli, ["setup", "tracking"])
         assert result.exit_code == 0
         mock_read_config.assert_called_once_with(path=None)
@@ -41,7 +46,9 @@ class TestTrackingCLI:
             force=False,
             cfg_path=None,
             finit=None,
+            case_reporter=mock_tracking_setup.call_args.kwargs["case_reporter"],
         )
+        assert "set up kc_0010pt00 (beta=10)" in result.output
 
     @patch("lst_tools.cli.cmd_tracking.tracking_setup")
     @patch("lst_tools.cli.cmd_tracking.read_config")

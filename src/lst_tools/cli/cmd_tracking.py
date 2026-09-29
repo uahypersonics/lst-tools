@@ -78,6 +78,9 @@ def cmd_tracking(
     # debug output for devs
     logger.debug("setting up input deck for tracking step")
 
+    def report_case(case_name: str, beta: float) -> None:
+        typer.echo(f"set up {case_name} (beta={beta:g})")
+
     try:
         # load config (read_config.py in /config/)
         config = read_config(path=cfg)
@@ -92,6 +95,7 @@ def cmd_tracking(
             force=force,
             cfg_path=resolved_cfg_path,
             finit=finit,
+            case_reporter=report_case,
         )
 
         typer.echo("tracking setup complete")

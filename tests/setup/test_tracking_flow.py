@@ -72,10 +72,12 @@ def test_tracking_setup_runs_orchestration_and_writes_launcher(
 
     monkeypatch.setattr(tracking_mod, "write_launcher_script", _fake_launcher)
 
-    out = tracking_mod.tracking_setup(cfg=cfg)
+    reported_cases: list[tuple[str, float]] = []
+    out = tracking_mod.tracking_setup(cfg=cfg, case_reporter=lambda name, beta: reported_cases.append((name, beta)))
 
     assert out == Path("run_jobs.sh")
     assert created_dirs == ["kc_0010pt00", "kc_0020pt00"]
+    assert reported_cases == [("kc_0010pt00", 10.0), ("kc_0020pt00", 20.0)]
     assert launcher_calls == [(["kc_0010pt00", "kc_0020pt00"], "sbatch")]
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import logging
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
@@ -956,6 +956,7 @@ def tracking_setup(
     force: bool = False,
     cfg_path: str | Path | None = None,
     finit: float | None = None,
+    case_reporter: Callable[[str, float], None] | None = None,
 ) -> Path:
     """Set up eigenvalue tracking cases for all requested beta values.
 
@@ -1033,9 +1034,6 @@ def tracking_setup(
         # - store the created directory name for the launcher script
         dir_name, lst_exe = _setup_case_directory(betr_loc, cfg)
 
-        # store the created directory name for the launcher script
-        created_dirs.append(dir_name)
-
         # generate seed_alpha.dat for this case (no-op when cfg.seed_table.enabled = false).
         # Returned `seeds` list is fed to _find_initial_guess so the debug
         # Tecplot file shows the harvested points overlaid on the contour.
@@ -1081,6 +1079,9 @@ def tracking_setup(
         hpc_cfg = _build_and_write_case(
             dir_name, cfg, initial_guess, betr_loc, tp, x_baseflow, lst_exe,
         )
+        created_dirs.append(dir_name)
+        if case_reporter is not None:
+            case_reporter(dir_name, float(betr_loc))
 
     if hpc_cfg is None:
         raise RuntimeError(
