@@ -48,13 +48,18 @@ def test_status_tracking_reports_finished_and_incomplete_cases(tmp_path):
     (tmp_path / "kc_0020pt00").mkdir()
 
     result = runner.invoke(cli, ["status", "tracking", str(tmp_path)])
+    full_result = runner.invoke(
+        cli, ["status", "tracking", str(tmp_path), "--all-issues"]
+    )
 
     assert result.exit_code == 0
-    assert "[finished] kc_0006pt00: 1 convergence issue(s)" in result.output
-    assert "station 267: x=0.0084568011, f=20000 Hz" in result.output
+    assert "[finished] kc_0006pt00\n" in result.output
+    assert "station 267:" not in result.output
+    assert "station 267:" not in full_result.output
     assert "[incomplete/unknown] kc_0010pt00" in result.output
     assert "[no log] kc_0020pt00" in result.output
     assert "3 cases, 1 finished, 1 incomplete/unknown, 1 without log" in result.output
+    assert "0 unfinished-case convergence issue(s)" in result.output
 
 
 def test_status_tracking_limits_issue_details_until_requested(tmp_path):

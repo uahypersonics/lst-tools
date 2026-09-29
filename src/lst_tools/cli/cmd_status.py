@@ -53,17 +53,18 @@ def cmd_status_tracking(
             continue
 
         run_status = read_run_log(log_path)
-        issue_count += len(run_status.issues)
         if run_status.finished:
             finished_count += 1
-            label = "finished"
-        else:
-            incomplete_count += 1
-            label = (
-                "stopped after nonconvergence"
-                if run_status.issues
-                else "incomplete/unknown"
-            )
+            typer.echo(f"[finished] {case_dir.name}")
+            continue
+
+        incomplete_count += 1
+        issue_count += len(run_status.issues)
+        label = (
+            "stopped after nonconvergence"
+            if run_status.issues
+            else "incomplete/unknown"
+        )
 
         typer.echo(
             f"[{label}] {case_dir.name}: {len(run_status.issues)} convergence issue(s)"
@@ -80,5 +81,5 @@ def cmd_status_tracking(
     typer.echo(
         f"Summary: {len(case_dirs)} cases, {finished_count} finished, "
         f"{incomplete_count} incomplete/unknown, {no_log_count} without log, "
-        f"{issue_count} convergence issue(s)"
+        f"{issue_count} unfinished-case convergence issue(s)"
     )
