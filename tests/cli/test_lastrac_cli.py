@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from unittest.mock import MagicMock, patch
 
@@ -56,6 +57,31 @@ class TestLastracCommand:
 
         mock_load.assert_called_once()
         mock_convert.assert_called_once()
+
+    @patch("lst_tools.cli.cmd_lastrac.read_config")
+    @patch("lst_tools.cli.cmd_lastrac._load_with_cfd_io")
+    @patch("lst_tools.cli.cmd_lastrac.convert_meanflow")
+    def test_warning_is_visible_without_verbose(
+        self,
+        mock_convert,
+        mock_load,
+        mock_read_config,
+        tmp_path,
+    ):
+        """User-facing warnings should print even when debug logging is off."""
+        hdf5_file = tmp_path / "base_flow.hdf5"
+        hdf5_file.touch()
+        mock_read_config.return_value = Config(input_file=str(hdf5_file))
+        mock_load.return_value = (MagicMock(), MagicMock(), {})
+        mock_convert.side_effect = lambda *args, **kwargs: logging.getLogger(
+            "lst_tools.convert.lastrac"
+        ).warning("dimensional warning visible")
+
+        result = runner.invoke(cli, ["lastrac"])
+
+        assert result.exit_code == 0
+        assert "WARNING" in result.output
+        assert "dimensional warning visible" in result.output
 
     @patch("lst_tools.cli.cmd_lastrac.read_config")
     @patch("lst_tools.cli.cmd_lastrac._load_with_cfd_io")

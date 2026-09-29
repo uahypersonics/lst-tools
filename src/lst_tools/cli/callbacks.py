@@ -24,6 +24,35 @@ def version_callback(value: bool) -> bool:
         raise typer.Exit()
     return value
 
+
+# --------------------------------------------------
+# configure package logging
+# --------------------------------------------------
+def _configure_console_logging(level: int) -> None:
+    """Send package log messages at or above level to the current stderr."""
+
+    lst_logger = logging.getLogger("lst_tools")
+    lst_logger.setLevel(level)
+
+    # reuse a console handler so repeated CliRunner invocations follow current stderr
+    stream_handlers = [
+        handler
+        for handler in lst_logger.handlers
+        if isinstance(handler, logging.StreamHandler)
+        and not isinstance(handler, logging.FileHandler)
+    ]
+    if stream_handlers:
+        for handler in stream_handlers:
+            handler.setLevel(level)
+            handler.stream = sys.stderr
+        return
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(level)
+    handler.setFormatter(logging.Formatter("[%(levelname)-7s] %(name)s: %(message)s"))
+    lst_logger.addHandler(handler)
+
+
 # --------------------------------------------------
 # verbose callback
 # --------------------------------------------------
@@ -31,30 +60,7 @@ def verbose_callback(value: bool) -> bool:
     """Enable diagnostic logging when --verbose is passed."""
 
     if value:
-        # use debug-level logging for rich user diagnostics
-        level = logging.DEBUG
-
-        # get package logger and set level
-        lst_logger = logging.getLogger("lst_tools")
-        lst_logger.setLevel(level)
-
-        # check whether a stderr stream handler already exists
-        has_stream_handler = False
-        for handler in lst_logger.handlers:
-            if isinstance(handler, logging.StreamHandler) and not isinstance(
-                handler, logging.FileHandler
-            ):
-                handler.setLevel(level)
-                has_stream_handler = True
-
-        # add a stream handler if none exists yet
-        if not has_stream_handler:
-            handler = logging.StreamHandler(sys.stderr)
-            handler.setLevel(level)
-            handler.setFormatter(
-                logging.Formatter("[%(levelname)-7s] %(name)s: %(message)s")
-            )
-            lst_logger.addHandler(handler)
+        _configure_console_logging(logging.DEBUG)
 
     return value
 
@@ -84,6 +90,6 @@ def cli_callback(
 ) -> None:
     """lst-tools: Linear Stability Theory pre-/postprocessing toolkit."""
 
-    # if verbose is not set, set logger level to warning
-    if not verbose:
-        logging.getLogger("lst_tools").setLevel(logging.WARNING)
+    # show warnings by default while reserving detailed diagnostics for --verbose
+    log_level = logging.DEBUG if verbose else logging.WARNING
+    _configure_console_logging(log_level)

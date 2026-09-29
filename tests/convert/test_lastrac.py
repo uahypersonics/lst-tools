@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -115,6 +116,55 @@ class TestConvertMeanflow:
             mock_writer.write_station_vector.call_count == 18
         )  # 6 vectors × 3 stations
         mock_writer.close.assert_called_once()
+
+    @patch("lst_tools.convert.lastrac.LastracWriter")
+    @patch("lst_tools.convert.lastrac.radius")
+    @patch("lst_tools.convert.lastrac.curvature")
+    @patch("lst_tools.convert.lastrac.surface_angle")
+    @patch("lst_tools.convert.lastrac.curvilinear_coordinate")
+    @patch("lst_tools.convert.lastrac.progress")
+    def test_warns_for_dimensional_input_without_nondimensionalization(
+        self,
+        mock_progress,
+        mock_curvilinear,
+        mock_surface_angle,
+        mock_curvature,
+        mock_radius,
+        mock_writer_class,
+        mock_grid,
+        mock_flow,
+        base_config,
+        caplog,
+    ):
+        """Warn clearly when dimensional values will be written unchanged."""
+        base_config.meanflow_conversion.nondimensionalize = False
+        mock_flow.fields["uvel"][:] = 654.9
+        mock_curvilinear.return_value = np.array([0.0, 1.0, 2.0])
+        mock_surface_angle.return_value = np.array([0.0, 0.0, 0.0])
+        mock_curvature.return_value = np.array([0.0, 0.0, 0.0])
+        mock_radius.return_value = np.array([0.0, 0.0, 0.0])
+
+        mock_progress_context = MagicMock()
+        mock_progress_context.__enter__.return_value = lambda: None
+        mock_progress.return_value = mock_progress_context
+        mock_writer_class.return_value = MagicMock()
+        caplog.set_level(logging.WARNING, logger="lst_tools.convert.lastrac")
+        assert base_config.meanflow_conversion.nondimensionalize is False
+
+        with patch(
+            "lst_tools.convert.lastrac._detect_dimensional_from_u_edge",
+            return_value=True,
+        ):
+            convert_meanflow(
+                grid=mock_grid,
+                flow=mock_flow,
+                out="dimensional.bin",
+                cfg=base_config,
+            )
+
+        assert "dimensional base flow detected" in caplog.text
+        assert "meanflow_conversion.nondimensionalize=true" in caplog.text
+        assert "flow_conditions.temp_inf, uvel_inf, and dens_inf" in caplog.text
 
     def test_missing_config_raises_error(self, mock_grid, mock_flow):
         """Test that missing configuration raises ValueError."""

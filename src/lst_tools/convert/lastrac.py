@@ -339,6 +339,10 @@ def convert_meanflow(
             "meanflow_conversion.nondimensionalize=true. "
             "Set meanflow_conversion.nondimensionalize=false to avoid double scaling."
         )
+    if is_dimensional and not do_nondimensionalize:
+        logger.warning("dimensional base flow detected")
+        logger.warning("meanflow_conversion.nondimensionalize=false")
+        logger.warning("meanflow.bin will retain dimensional velocity, temperature, and pressure values but lst code requires nondimensional inputs.")
 
     # throw error if user requested nondimensionalization but freestream values are non-positive (would lead to divide by zero)
     if do_nondimensionalize:

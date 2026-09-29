@@ -180,6 +180,10 @@ def _inject_init_comments(config_text: str) -> str:
         ('i_e = ""', "last station index, inclusive (required)"),
         ("d_i = 1", "station stride"),
         ("set_v_zero = true", "zero wall-normal velocity in the converted meanflow"),
+        (
+            "nondimensionalize = false",
+            "scale dimensional flow fields by freestream references; requires correct flow_conditions",
+        ),
         # lst.solver
         ("type = 1", "solver type: 1=global parallel, 2=tracking, 3=3-D tracking"),
         ("is_simplified = true", "use simplified (adiabatic) energy equation"),
