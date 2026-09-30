@@ -21,6 +21,7 @@ from .cmd_hpc import cmd_hpc
 from .cmd_info import cmd_info
 from .cmd_init import cmd_init
 from .cmd_lastrac import cmd_lastrac
+from .cmd_modes import cmd_modes
 from .cmd_parsing import cmd_parsing
 from .cmd_spectra import cmd_spectra
 from .cmd_spectra_process import cmd_spectra_process
@@ -119,6 +120,7 @@ setup_app.command(name="spectra")(cmd_spectra)
 # process subcommands
 process_app.command(name="tracking")(cmd_tracking_process)
 process_app.command(name="spectra")(cmd_spectra_process)
+process_app.command(name="modes")(cmd_modes)
 
 # clean subcommands
 clean_app.command(name="parsing")(cmd_clean_parsing)

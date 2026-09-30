@@ -9,7 +9,6 @@ only returns peak locations.  The extract_maxima() function uses those
 locations to gather full variable data and write output files.
 """
 
-
 # --------------------------------------------------
 # imports necessary modules
 # --------------------------------------------------
@@ -123,7 +122,6 @@ def _find_peaks_parabolic_interpolation(
     frac_peaks = np.empty(len(int_peaks), dtype=float)
 
     for k, j in enumerate(int_peaks):
-
         # boundary check: can't fit parabola at edges
         if j == 0 or j == nf - 1:
             frac_peaks[k] = float(j)
@@ -195,7 +193,6 @@ def _track_ridges(
 
     # walk downstream station by station
     for i in range(nx):
-
         # extract the frequency and target variable at this station
         freq_slice = freq_2d[:, i]
         target_slice = target_2d[:, i]
@@ -238,7 +235,6 @@ def _track_ridges(
         matched_peaks: set[int] = set()
 
         for r_i, p_i in zip(row_idx, col_idx):
-
             # gate check: reject if frequency distance is too large
             freq_diff = cost[r_i, p_i]
             ref_freq = prev_arr[r_i]
@@ -333,11 +329,11 @@ def extract_maxima(
     # squeeze K dimension to get (nf, nx, nvars)
     data_2d = tp.data[0, :, :, :]
 
-    # extract freq, alpi, nfac arrays via public .field() API
+    # extract freq, alpi, nfac3 arrays via public .field() API
     # shape is (K=1, nf, nx) — squeeze to (nf, nx)
     freq_2d = tp.field("freq")[0, :, :]
     alpi_2d = tp.field("alpi")[0, :, :]
-    nfac_2d = tp.field("nfac")[0, :, :]
+    nfac_2d = tp.field("nfac3")[0, :, :]
 
     # debug output for devs
     logger.debug("data shape (nf, nx, nvars): %s", data_2d.shape)
@@ -347,7 +343,13 @@ def extract_maxima(
     # --------------------------------------------------
     logger.info("extracting growth rate ridges...")
 
-    alpi_ridges = _track_ridges(alpi_2d, freq_2d, gate_tol=gate_tol, interpolate=interpolate, peak_order=peak_order)
+    alpi_ridges = _track_ridges(
+        alpi_2d,
+        freq_2d,
+        gate_tol=gate_tol,
+        interpolate=interpolate,
+        peak_order=peak_order,
+    )
 
     logger.info("found %d growth rate ridge(s) in %s", len(alpi_ridges), dir_name.name)
 
@@ -367,7 +369,13 @@ def extract_maxima(
     # --------------------------------------------------
     logger.info("extracting N-factor ridges...")
 
-    nfac_ridges = _track_ridges(nfac_2d, freq_2d, gate_tol=gate_tol, interpolate=interpolate, peak_order=peak_order)
+    nfac_ridges = _track_ridges(
+        nfac_2d,
+        freq_2d,
+        gate_tol=gate_tol,
+        interpolate=interpolate,
+        peak_order=peak_order,
+    )
 
     logger.info("found %d N-factor ridge(s) in %s", len(nfac_ridges), dir_name.name)
 
@@ -385,7 +393,9 @@ def extract_maxima(
 
     logger.info(
         "wrote %d alpi mode(s) and %d nfac mode(s) for %s",
-        len(alpi_files), len(nfac_files), dir_name.name,
+        len(alpi_files),
+        len(nfac_files),
+        dir_name.name,
     )
 
     return written_files
@@ -425,12 +435,12 @@ def _write_ridge_files(
     mode_num = 1
 
     for ridge in ridges:
-
         # skip modes with too few valid data points
         if len(ridge.indices) < min_valid:
             logger.debug(
                 "skipping mode with %d valid points (< %d)",
-                len(ridge.indices), min_valid,
+                len(ridge.indices),
+                min_valid,
             )
             continue
 
@@ -451,10 +461,7 @@ def _write_ridge_files(
 
         # build variable dict for writer
         mode_str = f"{mode_num:03d}"
-        var_dict = {
-            name: rows[:, col]
-            for col, name in enumerate(variables)
-        }
+        var_dict = {name: rows[:, col] for col, name in enumerate(variables)}
 
         # build output path
         if mode_root_dir is None:

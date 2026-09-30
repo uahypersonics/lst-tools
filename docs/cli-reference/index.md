@@ -99,6 +99,7 @@ Practical implications:
 | Subcommand | Purpose |
 |---|---|
 | [tracking](process-tracking.md) | Post-process tracking results |
+| [modes](process-modes.md) | Match maxima ridges across beta and build per-mode surfaces |
 | [spectra](process-spectra.md) | Post-process spectra results |
 
 ### `lst-tools status`

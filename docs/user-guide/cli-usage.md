@@ -113,6 +113,12 @@ lst-tools process tracking --interpolate
 lst-tools visualize tracking
 ```
 
+To combine the extracted maxima curves into separate surfaces for each
+matched physical mode, run `lst-tools process modes`. This is a separate stage
+from the tracking volume assembly; it reads the `nfac_max_mode_*` and
+`alpi_max_mode_*` folders created by maxima extraction. It writes each matched
+maximum surface and a maximum-over-beta envelope for that same physical mode.
+
 Repeat `--dir` to process selected `kc_*` directories only.
 
 Render parsing preview PNGs after parsing when needed:
