@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import sys
-import types
+from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,14 +11,18 @@ from typer.testing import CliRunner
 
 from lst_tools.cli.app import cli
 from lst_tools.cli.cmd_visualize import (
-    _compute_shared_bounds,
     _discover_tracking_files,
-    _resolve_field_name,
-    _split_candidates,
-    _visualize_data,
 )
 
 runner = CliRunner()
+
+
+@dataclass(frozen=True)
+class _FakePlotConfig:
+    """Minimal plotting configuration used by wrapper tests."""
+
+    input_path: Path | None
+    output_dir: Path
 
 
 class TestVisualizeCLI:
@@ -28,6 +31,7 @@ class TestVisualizeCLI:
     def test_visualize_group_help(self):
         result = runner.invoke(cli, ["visualize", "--help"])
         assert result.exit_code == 0
+        assert "init" in result.output
         assert "parsing" in result.output
         assert "tracking" in result.output
 
@@ -41,12 +45,32 @@ class TestVisualizeCLI:
         assert "tracking" in result.output
 
     @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
+    def test_visualize_init_dispatch(self, mock_import_module, tmp_path: Path):
+        config_path = tmp_path / "cfd-viz-lst.toml"
+        mock_writer = mock_import_module.return_value.write_default_lst_config
+        mock_writer.return_value = config_path
+
+        result = runner.invoke(
+            cli,
+            ["visualize", "init", str(config_path)],
+        )
+
+        assert result.exit_code == 0
+        assert f"wrote {config_path}" in result.output
+        mock_writer.assert_called_once_with(config_path, force=False)
+
+    @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
     def test_visualize_parsing_dispatch(self, mock_import_module, tmp_path: Path):
         input_file = tmp_path / "growth_rate_with_nfact_amps.dat"
         input_file.write_text("dummy", encoding="utf-8")
 
         out_dir = tmp_path / "viz_parsing"
-        mock_render = mock_import_module.return_value.render_lst_contours
+        mock_module = mock_import_module.return_value
+        plot_config = _FakePlotConfig(
+            input_path=Path("unused.dat"), output_dir=Path("unused")
+        )
+        mock_module.default_lst_config.return_value = plot_config
+        mock_render = mock_module.render_configured_lst_collection
         mock_render.return_value = [
             out_dir / "alpi_kc_0000.png",
             out_dir / "alpi_kc_0005.png",
@@ -66,13 +90,14 @@ class TestVisualizeCLI:
 
         assert result.exit_code == 0
         assert "visualization complete (parsing)" in result.output
-        mock_render.assert_called_once()
-        kwargs = mock_render.call_args.kwargs
-        assert kwargs["path"] == input_file
-        assert kwargs["out_dir"] == out_dir
-        assert kwargs["field"] == "-im(alpha)"
-        assert kwargs["all_k"] is True
-        assert kwargs["show"] is False
+        mock_render.assert_called_once_with(
+            plot_config,
+            [input_file],
+            output_dir=out_dir,
+            prefix_suffixes=None,
+            single_plane=False,
+            show=False,
+        )
 
     @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
     def test_visualize_tracking_dispatch(self, mock_import_module, tmp_path: Path):
@@ -80,7 +105,12 @@ class TestVisualizeCLI:
         input_file.write_text("dummy", encoding="utf-8")
 
         out_dir = tmp_path / "viz_tracking"
-        mock_render = mock_import_module.return_value.render_lst_contours
+        mock_module = mock_import_module.return_value
+        plot_config = _FakePlotConfig(
+            input_path=Path("unused.dat"), output_dir=Path("unused")
+        )
+        mock_module.default_lst_config.return_value = plot_config
+        mock_render = mock_module.render_configured_lst_collection
         mock_render.return_value = [out_dir / "alpi_kc_0100.png"]
 
         result = runner.invoke(
@@ -97,13 +127,53 @@ class TestVisualizeCLI:
 
         assert result.exit_code == 0
         assert "visualization complete (tracking)" in result.output
-        mock_render.assert_called_once()
-        kwargs = mock_render.call_args.kwargs
-        assert kwargs["field"] == "-im(alpha)"
-        assert kwargs["all_k"] is True
-        assert kwargs["k_index"] == 1
+        mock_render.assert_called_once_with(
+            plot_config,
+            [input_file],
+            output_dir=out_dir,
+            prefix_suffixes=None,
+            single_plane=False,
+            show=False,
+        )
 
-    @patch("lst_tools.cli.cmd_visualize.importlib.import_module", side_effect=ImportError("visualization backend missing"))
+    @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
+    def test_visualize_tracking_discovers_and_uses_config(
+        self,
+        mock_import_module,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / "cfd-viz-lst.toml"
+        config_path.write_text("config", encoding="utf-8")
+        input_file = tmp_path / "configured_tracking.dat"
+        input_file.write_text("dummy", encoding="utf-8")
+        out_dir = tmp_path / "configured_plots"
+        plot_config = _FakePlotConfig(input_path=input_file, output_dir=out_dir)
+
+        mock_module = mock_import_module.return_value
+        mock_module.load_lst_config.return_value = plot_config
+        mock_module.render_configured_lst_collection.return_value = [
+            out_dir / "alpi_kc_0000.png"
+        ]
+
+        result = runner.invoke(cli, ["visualize", "tracking"])
+
+        assert result.exit_code == 0
+        mock_module.load_lst_config.assert_called_once_with(Path("cfd-viz-lst.toml"))
+        mock_module.render_configured_lst_collection.assert_called_once_with(
+            plot_config,
+            [input_file],
+            output_dir=out_dir,
+            prefix_suffixes=None,
+            single_plane=False,
+            show=False,
+        )
+
+    @patch(
+        "lst_tools.cli.cmd_visualize.importlib.import_module",
+        side_effect=ImportError("visualization backend missing"),
+    )
     def test_visualize_missing_dependency(self, _mock_import_module, tmp_path: Path):
         input_file = tmp_path / "growth_rate_with_nfact_amps.dat"
         input_file.write_text("dummy", encoding="utf-8")
@@ -119,7 +189,9 @@ class TestVisualizeCLI:
         )
 
         assert result.exit_code != 0
-        assert "visualization support is required for visualize commands" in result.output
+        assert (
+            "visualization support is required for visualize commands" in result.output
+        )
 
     def test_visualize_input_missing(self):
         result = runner.invoke(
@@ -135,12 +207,10 @@ class TestVisualizeCLI:
         assert result.exit_code != 0
         assert "input file not found" in result.output
 
-    @patch("lst_tools.cli.cmd_visualize._visualize_data")
-    @patch("lst_tools.cli.cmd_visualize._compute_shared_bounds", return_value=(0.0, 50.0))
+    @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
     def test_visualize_tracking_fallback_kc_dirs(
         self,
-        _mock_bounds,
-        mock_visualize_data,
+        mock_import_module,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
@@ -152,28 +222,64 @@ class TestVisualizeCLI:
         (kc0 / "growth_rate_with_nfact_amps.dat").write_text("dummy", encoding="utf-8")
         (kc5 / "growth_rate_with_nfact_amps.dat").write_text("dummy", encoding="utf-8")
 
-        mock_visualize_data.side_effect = [
-            [Path("alpi_contours_tracking/alpi_kc_kc_0000_0000.png")],
-            [Path("alpi_contours_tracking/alpi_kc_kc_0005_0005.png")],
+        mock_module = mock_import_module.return_value
+        plot_config = _FakePlotConfig(
+            input_path=Path("lst_vol.dat"), output_dir=Path("alpi_contours_tracking")
+        )
+        mock_module.default_lst_config.return_value = plot_config
+        mock_module.render_configured_lst_collection.return_value = [
+            Path("alpi_contours_tracking/alpi_kc_kc_0000_0000.png"),
         ]
 
         result = runner.invoke(cli, ["visualize", "tracking"])
 
         assert result.exit_code == 0
         assert "tracking fallback: kc_* slices" in result.output
-        assert mock_visualize_data.call_count == 2
+        mock_module.render_configured_lst_collection.assert_called_once_with(
+            plot_config,
+            [
+                kc0 / "growth_rate_with_nfact_amps.dat",
+                kc5 / "growth_rate_with_nfact_amps.dat",
+            ],
+            output_dir=Path("alpi_contours_tracking"),
+            prefix_suffixes=["0000", "0005"],
+            single_plane=True,
+            show=False,
+        )
 
-        first_call = mock_visualize_data.call_args_list[0].kwargs
-        second_call = mock_visualize_data.call_args_list[1].kwargs
+    @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
+    def test_visualize_tracking_empty_config_input_discovers_kc_dirs(
+        self,
+        mock_import_module,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / "cfd-viz-lst.toml"
+        config_path.write_text('[input]\npath = ""\n', encoding="utf-8")
+        slice_dir = tmp_path / "kc_0000"
+        slice_dir.mkdir()
+        slice_file = slice_dir / "growth_rate_with_nfact_amps.dat"
+        slice_file.write_text("dummy", encoding="utf-8")
 
-        assert first_call["all_k"] is False
-        assert first_call["k_index"] == 1
-        assert first_call["level_min_override"] == 0.0
-        assert first_call["level_max_override"] == 50.0
-        assert second_call["all_k"] is False
-        assert second_call["k_index"] == 1
-        assert second_call["level_min_override"] == 0.0
-        assert second_call["level_max_override"] == 50.0
+        mock_module = mock_import_module.return_value
+        plot_config = _FakePlotConfig(input_path=None, output_dir=tmp_path / "plots")
+        mock_module.load_lst_config.return_value = plot_config
+        mock_module.render_configured_lst_collection.return_value = [
+            tmp_path / "plots" / "alpi_kc_kc_0000_0000.png"
+        ]
+
+        result = runner.invoke(cli, ["visualize", "tracking"])
+
+        assert result.exit_code == 0
+        mock_module.render_configured_lst_collection.assert_called_once_with(
+            plot_config,
+            [slice_file],
+            output_dir=tmp_path / "plots",
+            prefix_suffixes=["0000"],
+            single_plane=True,
+            show=False,
+        )
 
     def test_visualize_tracking_fallback_missing_all_inputs(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -182,51 +288,14 @@ class TestVisualizeCLI:
         result = runner.invoke(cli, ["visualize", "tracking"])
 
         assert result.exit_code != 0
-        assert "lst_vol.dat not found and no kc_* tracking slices discovered" in result.output
-
-
-class _FakeFlowField:
-    """Small stand-in for cfd_io field objects."""
-
-    def __init__(self, values):
-        self.data = values
-
-
-class _FakeDataset:
-    """Small stand-in for cfd_io datasets."""
-
-    def __init__(self, flow):
-        self.flow = flow
+        assert (
+            "lst_vol.dat not found and no kc_* tracking slices discovered"
+            in result.output
+        )
 
 
 class TestVisualizeHelpers:
     """Direct tests for helper logic in cmd_visualize."""
-
-    def test_split_candidates_strips_and_filters_empty(self):
-        result = _split_candidates(" alpha, beta , , gamma ,, ")
-
-        assert result == ["alpha", "beta", "gamma"]
-
-    def test_resolve_field_name_returns_first_match(self):
-        flow = {"beta": object(), "-im(alpha)": object()}
-
-        result = _resolve_field_name(flow, "missing, -im(alpha), beta")
-
-        assert result == "-im(alpha)"
-
-    def test_resolve_field_name_raises_with_available_fields(self):
-        flow = {"alpha": object(), "beta": object()}
-
-        try:
-            _resolve_field_name(flow, "missing, other")
-        except KeyError as exc:
-            message = str(exc)
-        else:
-            raise AssertionError("expected KeyError")
-
-        assert "none of the requested fields were found" in message
-        assert "alpha" in message
-        assert "beta" in message
 
     def test_discover_tracking_files_ignores_non_directories(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -242,207 +311,3 @@ class TestVisualizeHelpers:
         result = _discover_tracking_files(Path("."))
 
         assert result == [Path("kc_0000/growth_rate_with_nfact_amps.dat")]
-
-    def test_compute_shared_bounds_positive_rounded(self, monkeypatch):
-        fake_module = types.ModuleType("cfd_io")
-
-        data_map = {
-            "first.dat": _FakeDataset(
-                {"-im(alpha)": _FakeFlowField(values=__import__("numpy").array([1.2, 9.8]))}
-            ),
-            "second.dat": _FakeDataset(
-                {"-im(alpha)": _FakeFlowField(values=__import__("numpy").array([2.0, 12.1]))}
-            ),
-        }
-
-        def _fake_read_file(path: str):
-            return data_map[path]
-
-        fake_module.read_file = _fake_read_file
-        monkeypatch.setitem(sys.modules, "cfd_io", fake_module)
-
-        level_min, level_max = _compute_shared_bounds(
-            input_files=[Path("first.dat"), Path("second.dat")],
-            field="-im(alpha)",
-            levels_policy="positive-rounded",
-        )
-
-        assert level_min == 0.0
-        assert level_max == 20.0
-
-    def test_compute_shared_bounds_global_auto_and_degenerate_max(self, monkeypatch):
-        import numpy as np
-
-        fake_module = types.ModuleType("cfd_io")
-
-        data_map = {
-            "same.dat": _FakeDataset(
-                {"beta": _FakeFlowField(values=np.array([3.0, 3.0]))}
-            )
-        }
-
-        def _fake_read_file(path: str):
-            return data_map[path]
-
-        fake_module.read_file = _fake_read_file
-        monkeypatch.setitem(sys.modules, "cfd_io", fake_module)
-
-        level_min, level_max = _compute_shared_bounds(
-            input_files=[Path("same.dat")],
-            field="beta",
-            levels_policy="global-auto",
-        )
-
-        assert level_min == 3.0
-        assert level_max == 4.0
-
-    def test_compute_shared_bounds_unknown_policy_raises(self, monkeypatch):
-        import numpy as np
-
-        fake_module = types.ModuleType("cfd_io")
-        fake_module.read_file = lambda _path: _FakeDataset(
-            {"beta": _FakeFlowField(values=np.array([1.0, 2.0]))}
-        )
-        monkeypatch.setitem(sys.modules, "cfd_io", fake_module)
-
-        try:
-            _compute_shared_bounds(
-                input_files=[Path("sample.dat")],
-                field="beta",
-                levels_policy="bad-policy",
-            )
-        except ValueError as exc:
-            message = str(exc)
-        else:
-            raise AssertionError("expected ValueError")
-
-        assert "unknown levels policy" in message
-
-    def test_visualize_data_missing_input_raises(self, tmp_path: Path):
-        missing_input = tmp_path / "missing.dat"
-
-        try:
-            _visualize_data(
-                stage="parsing",
-                input_path=missing_input,
-                out_dir=tmp_path / "out",
-                prefix="alpi",
-                field="-im(alpha)",
-                xvar="s",
-                yvar="freq",
-                kvar="beta",
-                all_k=True,
-                k_index=1,
-                levels_policy="positive-rounded",
-                levels_count=60,
-                clip_below=True,
-                dpi=300,
-            )
-        except FileNotFoundError as exc:
-            message = str(exc)
-        else:
-            raise AssertionError("expected FileNotFoundError")
-
-        assert "input file not found" in message
-
-    @patch("lst_tools.cli.cmd_visualize.importlib.import_module", side_effect=ImportError("missing backend"))
-    def test_visualize_data_missing_backend_raises_runtime_error(self, _mock_import_module, tmp_path: Path):
-        input_file = tmp_path / "input.dat"
-        input_file.write_text("dummy", encoding="utf-8")
-
-        try:
-            _visualize_data(
-                stage="parsing",
-                input_path=input_file,
-                out_dir=tmp_path / "out",
-                prefix="alpi",
-                field="-im(alpha)",
-                xvar="s",
-                yvar="freq",
-                kvar="beta",
-                all_k=True,
-                k_index=1,
-                levels_policy="positive-rounded",
-                levels_count=60,
-                clip_below=True,
-                dpi=300,
-            )
-        except RuntimeError as exc:
-            message = str(exc)
-        else:
-            raise AssertionError("expected RuntimeError")
-
-        assert "visualization support is required" in message
-
-    @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
-    def test_visualize_data_dispatch_and_summary(self, mock_import_module, tmp_path: Path, capsys):
-        input_file = tmp_path / "input.dat"
-        input_file.write_text("dummy", encoding="utf-8")
-        out_dir = tmp_path / "out"
-        mock_render = mock_import_module.return_value.render_lst_contours
-        mock_render.return_value = [out_dir / "first.png", out_dir / "last.png"]
-
-        result = _visualize_data(
-            stage="tracking",
-            input_path=input_file,
-            out_dir=out_dir,
-            prefix="alpi",
-            field="-im(alpha)",
-            xvar="s",
-            yvar="freq",
-            kvar="beta",
-            all_k=False,
-            k_index=2,
-            levels_policy="positive-rounded",
-            levels_count=25,
-            level_min_override=0.0,
-            level_max_override=10.0,
-            clip_below=True,
-            dpi=150,
-        )
-
-        assert result == [out_dir / "first.png", out_dir / "last.png"]
-        mock_render.assert_called_once()
-        kwargs = mock_render.call_args.kwargs
-        assert kwargs["path"] == input_file
-        assert kwargs["out_dir"] == out_dir
-        assert kwargs["prefix"] == "alpi"
-        assert kwargs["all_k"] is False
-        assert kwargs["k_index"] == 2
-        assert kwargs["level_min_override"] == 0.0
-        assert kwargs["level_max_override"] == 10.0
-        assert kwargs["levels_count"] == 25
-        assert kwargs["dpi"] == 150
-
-        output = capsys.readouterr().out
-        assert "visualization complete (tracking)" in output
-        assert "wrote 2 plot(s)" in output
-        assert "first:" in output
-        assert "last:" in output
-
-    @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
-    def test_visualize_data_emit_summary_false_suppresses_output(self, mock_import_module, tmp_path: Path, capsys):
-        input_file = tmp_path / "input.dat"
-        input_file.write_text("dummy", encoding="utf-8")
-        mock_import_module.return_value.render_lst_contours.return_value = []
-
-        _visualize_data(
-            stage="tracking",
-            input_path=input_file,
-            out_dir=tmp_path / "out",
-            prefix="alpi",
-            field="-im(alpha)",
-            xvar="s",
-            yvar="freq",
-            kvar="beta",
-            all_k=False,
-            k_index=1,
-            levels_policy="positive-rounded",
-            levels_count=60,
-            clip_below=True,
-            dpi=300,
-            emit_summary=False,
-        )
-
-        output = capsys.readouterr().out
-        assert output == ""

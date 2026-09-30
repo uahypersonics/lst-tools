@@ -1,6 +1,5 @@
 """lst-tools visualize — stage-aware wrappers for quick LST contour plots."""
 
-
 # --------------------------------------------------
 # load necessary modules
 # --------------------------------------------------
@@ -8,9 +7,8 @@ from __future__ import annotations
 
 import importlib
 import logging
-import math
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -21,47 +19,30 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------
-# default rendering settings for minimal wrappers
+# workflow paths
 # --------------------------------------------------
-DEFAULT_FIELD = "-im(alpha)"
-DEFAULT_PARSING_PREFIX = "alpi_kc"
-DEFAULT_TRACKING_PREFIX = "alpi_kc"
-DEFAULT_XVAR = "s"
-DEFAULT_YVAR = "freq,freq."
-DEFAULT_KVAR = "beta"
-DEFAULT_ALL_K = True
-DEFAULT_K_INDEX = 1
-DEFAULT_LEVELS_POLICY = "positive-rounded"
-DEFAULT_LEVELS_COUNT = 60
-DEFAULT_CLIP_BELOW = True
-DEFAULT_DPI = 300
+DEFAULT_CONFIG_PATH = Path("cfd-viz-lst.toml")
+DEFAULT_PARSING_INPUT = Path("growth_rate_with_nfact_amps.dat")
+DEFAULT_PARSING_OUTPUT = Path("alpi_contours_parsing")
+DEFAULT_TRACKING_INPUT = Path("lst_vol.dat")
+DEFAULT_TRACKING_OUTPUT = Path("alpi_contours_tracking")
 
 
 # --------------------------------------------------
-# parse variable candidates helper
+# import optional cfd-viz backend
 # --------------------------------------------------
-def _split_candidates(raw: str) -> list[str]:
-    """Split comma-separated aliases into ordered candidate names."""
-    return [name.strip() for name in raw.split(",") if name.strip()]
+def _load_visualization_backend() -> Any:
+    """Import the optional cfd-viz LST API with actionable error guidance."""
 
+    try:
+        lst_module = importlib.import_module("cfd_viz.lst")
+    except Exception as exc:
+        raise RuntimeError(
+            "visualization support is required for visualize commands. "
+            "Install lst-tools with the 'viz' extra."
+        ) from exc
 
-# --------------------------------------------------
-# resolve actual field name helper
-# --------------------------------------------------
-def _resolve_field_name(flow: dict[str, object], raw_candidates: str) -> str:
-    """Resolve first matching field name from candidate aliases."""
-
-    # check each candidate in order
-    candidates = _split_candidates(raw_candidates)
-    for name in candidates:
-        if name in flow:
-            return name
-
-    # include available variables in error for easier debugging
-    available = list(flow.keys())
-    raise KeyError(
-        f"none of the requested fields were found: {candidates}; available={available}"
-    )
+    return lst_module
 
 
 # --------------------------------------------------
@@ -84,7 +65,6 @@ def _discover_tracking_files(search_dir: Path) -> list[Path]:
 
     # iterate over discovered directories and collect existing solution files
     for dir in dir_list:
-
         # first check if it is a directory before looking for files inside, to avoid false matches
         if not dir.is_dir():
             continue
@@ -99,134 +79,94 @@ def _discover_tracking_files(search_dir: Path) -> list[Path]:
 
 
 # --------------------------------------------------
-# compute shared contour bounds across multiple files
+# load cfd-viz configuration
 # --------------------------------------------------
-def _compute_shared_bounds(
-    *,
-    input_files: list[Path],
-    field: str,
-    levels_policy: str,
-) -> tuple[float, float]:
-    """Compute global min/max bounds for consistent multi-file rendering."""
+def _load_visualization_config(config_path: Path | None) -> tuple[Any, Any, bool]:
+    """Load explicit/local configuration or cfd-viz built-in defaults."""
 
-    # lazy import reader here so non-visualize workflows avoid this dependency
-    from cfd_io import read_file
+    # select an explicit path or discover the standard local filename
+    selected_path = config_path
+    if selected_path is None and DEFAULT_CONFIG_PATH.exists():
+        selected_path = DEFAULT_CONFIG_PATH
 
-    # initialize global extrema
-    global_min: float | None = None
-    global_max: float | None = None
-
-    # read each file and update extrema for resolved field values
-    for fpath in input_files:
-        ds = read_file(str(fpath))
-        field_name = _resolve_field_name(ds.flow, field)
-        values = ds.flow[field_name].data
-
-        local_min = float(values.min())
-        local_max = float(values.max())
-
-        global_min = local_min if global_min is None else min(global_min, local_min)
-        global_max = local_max if global_max is None else max(global_max, local_max)
-
-    if global_min is None or global_max is None:
-        raise ValueError("could not compute contour bounds from tracking slices")
-
-    # apply selected contour policy to global extrema
-    if levels_policy == "positive-rounded":
-        level_min = 0.0
-        level_max = float(math.ceil(global_max / 10.0) * 10.0)
-    elif levels_policy == "global-auto":
-        level_min = global_min
-        level_max = global_max
+    # load configured values or ask cfd-viz for its authoritative defaults
+    lst_module = _load_visualization_backend()
+    config_found = selected_path is not None
+    if config_found:
+        config = lst_module.load_lst_config(selected_path)
     else:
-        raise ValueError(
-            f"unknown levels policy '{levels_policy}'. Use one of: global-auto, positive-rounded"
-        )
+        config = lst_module.default_lst_config()
 
-    # avoid degenerate contour bounds
-    if level_max <= level_min:
-        level_max = level_min + 1.0
-
-    return level_min, level_max
+    return lst_module, config, config_found
 
 
 # --------------------------------------------------
-# shared wrapper implementation
+# render through a cfd-viz configuration
 # --------------------------------------------------
-def _visualize_data(
+def _visualize_files(
     *,
     stage: str,
-    input_path: Path,
+    input_files: list[Path],
     out_dir: Path,
-    prefix: str,
-    field: str,
-    xvar: str,
-    yvar: str,
-    kvar: str,
-    all_k: bool,
-    k_index: int,
-    levels_policy: str,
-    levels_count: int,
-    level_min_override: float | None = None,
-    level_max_override: float | None = None,
-    clip_below: bool,
-    dpi: int,
-    emit_summary: bool = True,
+    lst_module: Any,
+    config: Any,
+    prefix_suffixes: list[str | None] | None = None,
+    single_plane: bool = False,
 ) -> list[Path]:
-    """Dispatch stage visualization to the plotting backend."""
+    """Delegate a discovered file collection to cfd-viz."""
 
-    # validate input file exists before rendering
-    if not input_path.exists():
-        raise FileNotFoundError(f"input file not found: {input_path}")
-
-    # debug output for devs
-    logger.debug(
-        "visualize %s: input=%s, out_dir=%s, prefix=%s",
-        stage,
-        input_path,
-        out_dir,
-        prefix,
-    )
-
-    # lazily import plotting backend only when visualize commands are used
-    try:
-        lst_module = importlib.import_module("cfd_viz.lst")
-        render_lst_contours = lst_module.render_lst_contours
-    except Exception as exc:  # pragma: no cover - tested via CLI behavior
-        raise RuntimeError(
-            "visualization support is required for visualize commands. "
-            "Install the visualization dependency in this environment."
-        ) from exc
-
-    # call plotting backend
-    files = render_lst_contours(
-        path=input_path,
-        field=field,
-        xvar=xvar,
-        yvar=yvar,
-        kvar=kvar,
-        all_k=all_k,
-        k_index=k_index,
-        out_dir=out_dir,
-        prefix=prefix,
-        levels_policy=levels_policy,
-        levels_count=levels_count,
-        level_min_override=level_min_override,
-        level_max_override=level_max_override,
-        clip_below=clip_below,
-        dpi=dpi,
+    # delegate configuration, bounds, naming, and rendering to cfd-viz
+    files = lst_module.render_configured_lst_collection(
+        config,
+        input_files,
+        output_dir=out_dir,
+        prefix_suffixes=prefix_suffixes,
+        single_plane=single_plane,
         show=False,
     )
 
     # print user summary
-    if emit_summary:
-        typer.echo(f"visualization complete ({stage})")
-        typer.echo(f"wrote {len(files)} plot(s)")
-        if files:
-            typer.echo(f"first: {files[0]}")
-            typer.echo(f"last:  {files[-1]}")
+    typer.echo(f"visualization complete ({stage})")
+    typer.echo(f"wrote {len(files)} plot(s)")
+    if files:
+        typer.echo(f"first: {files[0]}")
+        typer.echo(f"last:  {files[-1]}")
 
     return files
+
+
+# --------------------------------------------------
+# visualization configuration initializer
+# --------------------------------------------------
+def cmd_visualize_init(
+    output: Annotated[
+        Path,
+        typer.Argument(help="cfd-viz LST configuration to create."),
+    ] = DEFAULT_CONFIG_PATH,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Replace an existing configuration."),
+    ] = False,
+) -> None:
+    """Create an editable cfd-viz LST plotting configuration."""
+
+    # lazily import the visualization backend
+    try:
+        lst_module = importlib.import_module("cfd_viz.lst")
+        write_default_lst_config = lst_module.write_default_lst_config
+    except Exception as exc:
+        raise RuntimeError(
+            "visualization support is required to create the plotting configuration"
+        ) from exc
+
+    # write the configuration without replacing user edits by default
+    try:
+        written = write_default_lst_config(output, force=force)
+    except FileExistsError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(f"wrote {written}")
 
 
 # --------------------------------------------------
@@ -234,43 +174,58 @@ def _visualize_data(
 # --------------------------------------------------
 def cmd_visualize_parsing(
     input_path: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--input",
             "-i",
             help="Parsing Tecplot input file (default: growth_rate_with_nfact_amps.dat).",
         ),
-    ] = Path("growth_rate_with_nfact_amps.dat"),
+    ] = None,
     out_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--out",
             "-o",
             help="Output directory for rendered parsing plots.",
         ),
-    ] = Path("alpi_contours_parsing"),
+    ] = None,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="cfd-viz LST config; defaults to cfd-viz-lst.toml when present.",
+        ),
+    ] = None,
 ) -> None:
-    """Visualize parsing results using built-in defaults."""
+    """Visualize parsing results through cfd-viz."""
     try:
-        _visualize_data(
+        # load cfd-viz policy and select workflow-owned paths
+        lst_module, plot_config, config_found = _load_visualization_config(config_path)
+        selected_input = input_path
+        if selected_input is None:
+            if config_found:
+                selected_input = plot_config.input_path
+            else:
+                selected_input = DEFAULT_PARSING_INPUT
+
+        selected_out_dir = out_dir
+        if selected_out_dir is None:
+            if config_found:
+                selected_out_dir = plot_config.output_dir
+            else:
+                selected_out_dir = DEFAULT_PARSING_OUTPUT
+
+        _visualize_files(
             stage="parsing",
-            input_path=input_path,
-            out_dir=out_dir,
-            prefix=DEFAULT_PARSING_PREFIX,
-            field=DEFAULT_FIELD,
-            xvar=DEFAULT_XVAR,
-            yvar=DEFAULT_YVAR,
-            kvar=DEFAULT_KVAR,
-            all_k=DEFAULT_ALL_K,
-            k_index=DEFAULT_K_INDEX,
-            levels_policy=DEFAULT_LEVELS_POLICY,
-            levels_count=DEFAULT_LEVELS_COUNT,
-            clip_below=DEFAULT_CLIP_BELOW,
-            dpi=DEFAULT_DPI,
+            input_files=[selected_input],
+            out_dir=selected_out_dir,
+            lst_module=lst_module,
+            config=plot_config,
         )
     except Exception as exc:
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
 
 # --------------------------------------------------
@@ -278,96 +233,85 @@ def cmd_visualize_parsing(
 # --------------------------------------------------
 def cmd_visualize_tracking(
     input_path: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--input",
             "-i",
             help="Tracking Tecplot volume input file (default: lst_vol.dat).",
         ),
-    ] = Path("lst_vol.dat"),
+    ] = None,
     out_dir: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--out",
             "-o",
             help="Output directory for rendered tracking plots.",
         ),
-    ] = Path("alpi_contours_tracking"),
+    ] = None,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="cfd-viz LST config; defaults to cfd-viz-lst.toml when present.",
+        ),
+    ] = None,
 ) -> None:
-    """Visualize tracking results using built-in defaults."""
+    """Visualize tracking results using optional cfd-viz configuration."""
     try:
+        # load cfd-viz plot configuration from the current directory or defaults
+        lst_module, plot_config, config_found = _load_visualization_config(config_path)
+
         # set default input file used for tracking fallback behavior
-        default_tracking_volume = Path("lst_vol.dat")
+        selected_input = input_path
+        if selected_input is None:
+            if config_found:
+                selected_input = plot_config.input_path
+            else:
+                selected_input = DEFAULT_TRACKING_INPUT
+
+        selected_out_dir = out_dir
+        if selected_out_dir is None:
+            if config_found:
+                selected_out_dir = plot_config.output_dir
+            else:
+                selected_out_dir = DEFAULT_TRACKING_OUTPUT
 
         # primary path: use consolidated tracking volume when present
-        if input_path.exists():
-            _visualize_data(
+        if selected_input is not None and selected_input.exists():
+            _visualize_files(
                 stage="tracking",
-                input_path=input_path,
-                out_dir=out_dir,
-                prefix=DEFAULT_TRACKING_PREFIX,
-                field=DEFAULT_FIELD,
-                xvar=DEFAULT_XVAR,
-                yvar=DEFAULT_YVAR,
-                kvar=DEFAULT_KVAR,
-                all_k=DEFAULT_ALL_K,
-                k_index=DEFAULT_K_INDEX,
-                levels_policy=DEFAULT_LEVELS_POLICY,
-                levels_count=DEFAULT_LEVELS_COUNT,
-                clip_below=DEFAULT_CLIP_BELOW,
-                dpi=DEFAULT_DPI,
+                input_files=[selected_input],
+                out_dir=selected_out_dir,
+                lst_module=lst_module,
+                config=plot_config,
             )
             return
 
         # fallback path: discover individual kc_* tracking slices
-        if input_path != default_tracking_volume:
-            raise FileNotFoundError(f"input file not found: {input_path}")
+        if input_path is not None:
+            raise FileNotFoundError(f"input file not found: {selected_input}")
 
         root = Path(".").resolve()
         slice_files = _discover_tracking_files(root)
         if not slice_files:
             raise FileNotFoundError(
-                f"{default_tracking_volume} not found and no kc_* tracking slices discovered"
+                f"{DEFAULT_TRACKING_INPUT} not found and no kc_* tracking slices discovered"
             )
 
-        # compute one shared contour scale across all discovered slices
-        level_min, level_max = _compute_shared_bounds(
+        # delegate shared bounds and rendering for the discovered collection
+        prefix_suffixes = [
+            input_file.parent.name.removeprefix("kc_") for input_file in slice_files
+        ]
+        _visualize_files(
+            stage="tracking fallback: kc_* slices",
             input_files=slice_files,
-            field=DEFAULT_FIELD,
-            levels_policy=DEFAULT_LEVELS_POLICY,
+            out_dir=selected_out_dir,
+            lst_module=lst_module,
+            config=plot_config,
+            prefix_suffixes=prefix_suffixes,
+            single_plane=True,
         )
-
-        # render one contour per kc directory into a common output folder
-        all_outputs: list[Path] = []
-        for fpath in slice_files:
-            case_prefix = f"{DEFAULT_TRACKING_PREFIX}_{fpath.parent.name}"
-            outputs = _visualize_data(
-                stage="tracking",
-                input_path=fpath,
-                out_dir=out_dir,
-                prefix=case_prefix,
-                field=DEFAULT_FIELD,
-                xvar=DEFAULT_XVAR,
-                yvar=DEFAULT_YVAR,
-                kvar=DEFAULT_KVAR,
-                all_k=False,
-                k_index=DEFAULT_K_INDEX,
-                levels_policy=DEFAULT_LEVELS_POLICY,
-                levels_count=DEFAULT_LEVELS_COUNT,
-                level_min_override=level_min,
-                level_max_override=level_max,
-                clip_below=DEFAULT_CLIP_BELOW,
-                dpi=DEFAULT_DPI,
-                emit_summary=False,
-            )
-            all_outputs.extend(outputs)
-
-        # print consolidated fallback summary
-        typer.echo("visualization complete (tracking fallback: kc_* slices)")
-        typer.echo(f"wrote {len(all_outputs)} plot(s)")
-        if all_outputs:
-            typer.echo(f"first: {all_outputs[0]}")
-            typer.echo(f"last:  {all_outputs[-1]}")
     except Exception as exc:
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc

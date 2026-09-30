@@ -27,6 +27,7 @@ Issues = "https://github.com/uahypersonics/lst-tools/issues"
 #
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "tqdm", "rich", "ruff"]
+viz = ["cfd-viz"]
 docs = [
   "zensical",
   "mkdocstrings[python]>=0.24",

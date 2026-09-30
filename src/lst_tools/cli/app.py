@@ -28,7 +28,11 @@ from .cmd_spectra_process import cmd_spectra_process
 from .cmd_status import status_app
 from .cmd_tracking import cmd_tracking
 from .cmd_tracking_process import cmd_tracking_process
-from .cmd_visualize import cmd_visualize_parsing, cmd_visualize_tracking
+from .cmd_visualize import (
+    cmd_visualize_init,
+    cmd_visualize_parsing,
+    cmd_visualize_tracking,
+)
 from .cmd_visualize_meanflow import cmd_visualize_meanflow
 
 cli = typer.Typer(
@@ -73,7 +77,7 @@ cli.callback()(cli_callback)
 # name= is only needed when the CLI name differs from the function name
 #   (e.g. spectra-process vs spectra_process)
 # --------------------------------------------------
-    
+
 # workflow commands
 cli.command(name="init", rich_help_panel="Workflow")(cmd_init)
 cli.add_typer(
@@ -103,7 +107,7 @@ cli.add_typer(
 cli.add_typer(status_app, name="status", rich_help_panel="Workflow")
 
 # utility commands
-cli.command(name="hpc",rich_help_panel="Utilities")(cmd_hpc)
+cli.command(name="hpc", rich_help_panel="Utilities")(cmd_hpc)
 cli.command(
     name="info",
     rich_help_panel="Utilities",
@@ -128,6 +132,7 @@ clean_app.command(name="tracking")(cmd_clean_tracking)
 clean_app.command(name="spectra")(cmd_clean_spectra)
 
 # visualize subcommands
+visualize_app.command(name="init")(cmd_visualize_init)
 visualize_app.command(name="parsing")(cmd_visualize_parsing)
 visualize_app.command(name="tracking")(cmd_visualize_tracking)
 visualize_app.command(name="meanflow")(cmd_visualize_meanflow)
