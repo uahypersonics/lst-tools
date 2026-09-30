@@ -193,7 +193,11 @@ class TestVisualizeCLI:
             "visualization support is required for visualize commands" in result.output
         )
 
-    def test_visualize_input_missing(self):
+    @patch(
+        "lst_tools.cli.cmd_visualize.importlib.import_module",
+        side_effect=ImportError("visualization backend missing"),
+    )
+    def test_visualize_input_missing(self, mock_import_module):
         result = runner.invoke(
             cli,
             [
@@ -206,6 +210,7 @@ class TestVisualizeCLI:
 
         assert result.exit_code != 0
         assert "input file not found" in result.output
+        mock_import_module.assert_not_called()
 
     @patch("lst_tools.cli.cmd_visualize.importlib.import_module")
     def test_visualize_tracking_fallback_kc_dirs(
@@ -281,8 +286,15 @@ class TestVisualizeCLI:
             show=False,
         )
 
+    @patch(
+        "lst_tools.cli.cmd_visualize.importlib.import_module",
+        side_effect=ImportError("visualization backend missing"),
+    )
     def test_visualize_tracking_fallback_missing_all_inputs(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        mock_import_module,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(cli, ["visualize", "tracking"])
@@ -292,6 +304,7 @@ class TestVisualizeCLI:
             "lst_vol.dat not found and no kc_* tracking slices discovered"
             in result.output
         )
+        mock_import_module.assert_not_called()
 
 
 class TestVisualizeHelpers:

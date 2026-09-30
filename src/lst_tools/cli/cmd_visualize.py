@@ -200,11 +200,15 @@ def cmd_visualize_parsing(
 ) -> None:
     """Visualize parsing results through cfd-viz."""
     try:
+        # validate an explicit workflow input before loading the optional backend
+        if input_path is not None and not input_path.exists():
+            raise FileNotFoundError(f"input file not found: {input_path}")
+
         # load cfd-viz policy and select workflow-owned paths
         lst_module, plot_config, config_found = _load_visualization_config(config_path)
         selected_input = input_path
         if selected_input is None:
-            if config_found:
+            if config_found and plot_config.input_path is not None:
                 selected_input = plot_config.input_path
             else:
                 selected_input = DEFAULT_PARSING_INPUT
@@ -259,6 +263,25 @@ def cmd_visualize_tracking(
 ) -> None:
     """Visualize tracking results using optional cfd-viz configuration."""
     try:
+        # validate an explicit workflow input before loading the optional backend
+        if input_path is not None and not input_path.exists():
+            raise FileNotFoundError(f"input file not found: {input_path}")
+
+        # report missing default inputs before requiring the optional backend
+        config_available = config_path is not None or DEFAULT_CONFIG_PATH.exists()
+        slice_files: list[Path] | None = None
+        if (
+            input_path is None
+            and not config_available
+            and not DEFAULT_TRACKING_INPUT.exists()
+        ):
+            root = Path(".").resolve()
+            slice_files = _discover_tracking_files(root)
+            if not slice_files:
+                raise FileNotFoundError(
+                    f"{DEFAULT_TRACKING_INPUT} not found and no kc_* tracking slices discovered"
+                )
+
         # load cfd-viz plot configuration from the current directory or defaults
         lst_module, plot_config, config_found = _load_visualization_config(config_path)
 
@@ -292,8 +315,9 @@ def cmd_visualize_tracking(
         if input_path is not None:
             raise FileNotFoundError(f"input file not found: {selected_input}")
 
-        root = Path(".").resolve()
-        slice_files = _discover_tracking_files(root)
+        if slice_files is None:
+            root = Path(".").resolve()
+            slice_files = _discover_tracking_files(root)
         if not slice_files:
             raise FileNotFoundError(
                 f"{DEFAULT_TRACKING_INPUT} not found and no kc_* tracking slices discovered"
