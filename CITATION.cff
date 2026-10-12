@@ -8,7 +8,6 @@ date-released: 2026-05-03
 authors:
   - family-names: "Hader"
     given-names: "Christoph"
-    affiliation: "University of Arizona"
     orcid: "https://orcid.org/0000-0002-0956-000X"
 repository-code: "https://github.com/uahypersonics/lst-tools"
 url: "https://uahypersonics.github.io/lst-tools"
