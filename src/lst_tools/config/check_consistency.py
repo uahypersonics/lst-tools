@@ -27,14 +27,10 @@ logger = logging.getLogger(__name__)
 def get(d: dict[str, Any], path: str, default: Any = None) -> Any:
     """Retrieve a value from a nested dict using a dotted path.
 
-    Parameters
-    ----------
-    d : dict
-        Nested dictionary to search.
-    path : str
-        Dot-separated key path, e.g. ``"lst.solver.type"``.
-    default : Any
-        Value returned when any segment is missing.
+    Args:
+        d (dict): Nested dictionary to search.
+        path (str): Dot-separated key path, e.g. ``"lst.solver.type"``.
+        default (Any): Value returned when any segment is missing.
     """
 
     cur: Any = d
@@ -327,17 +323,12 @@ def check_consistency(
 ) -> tuple[list[Issue], list[Issue]]:
     """Run all registered checks and return ``(errors, warnings)``.
 
-    Parameters
-    ----------
-    cfg : dict
-        Configuration dictionary (or ``Config`` dataclass with ``to_dict``).
-    enabled : Iterable[str] | None
-        If provided, only run checks whose names are in this set.
+    Args:
+        cfg (dict): Configuration dictionary (or ``Config`` dataclass with ``to_dict``).
+        enabled (Iterable[str] | None): If provided, only run checks whose names are in this set.
 
-    Returns
-    -------
-    tuple[list[Issue], list[Issue]]
-        ``(errors, warnings)`` collected from all executed checks.
+    Returns:
+        tuple[list[Issue], list[Issue]]: ``(errors, warnings)`` collected from all executed checks.
     """
 
     # --------------------------------------------------

@@ -120,19 +120,13 @@ def resolve(
 ) -> ResolvedJob:
     """Build a frozen :class:`ResolvedJob` from *env* and user settings.
 
-    Parameters
-    ----------
-    env:
-        Result of :func:`_detect.detect`.
-    user_hpc:
-        The ``[hpc]`` section from the user config file (may be ``None``).
-    set_defaults:
-        When ``True`` (interactive CLI), apply generous defaults for
-        ``nodes`` and ``time`` so the script is immediately runnable.
-    nodes_override:
-        If given, override the user-config / default node count.
-    time_override:
-        If given, override the user-config / default wall-time.
+    Args:
+        env: Result of :func:`_detect.detect`.
+        user_hpc: The ``[hpc]`` section from the user config file (may be ``None``).
+        set_defaults: When ``True`` (interactive CLI), apply generous defaults for
+            ``nodes`` and ``time`` so the script is immediately runnable.
+        nodes_override: If given, override the user-config / default node count.
+        time_override: If given, override the user-config / default wall-time.
     """
     u = user_hpc or {}
 

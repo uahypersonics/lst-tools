@@ -46,18 +46,13 @@ def auto_fill_tracking(cfg: Any, *, force: bool = False, cfg_path: str | Path | 
     per-case from the parsing solution, so only the wavenumber sweep
     and ``i_step`` need to be present in the base config.
 
-    Parameters
-    ----------
-    cfg : Config
-        A validated configuration object (dataclass).
-    cfg_path : str or Path, optional
-        Path to the config file on disk.  When provided the config is
-        written back with ``overwrite=True`` after filling.
+    Args:
+        cfg (Config): A validated configuration object (dataclass).
+        cfg_path (str or Path, optional): Path to the config file on disk.  When provided the config is
+            written back with ``overwrite=True`` after filling.
 
-    Returns
-    -------
-    bool
-        ``True`` if at least one field was filled, ``False`` otherwise.
+    Returns:
+        bool: ``True`` if at least one field was filled, ``False`` otherwise.
     """
     params = cfg.lst.params
     changed = False
@@ -418,12 +413,9 @@ def _setup_case_directory(
 ) -> tuple[str, str | None]:
     """Create kc_* directory, copy meanflow.bin and LST executable.
 
-    Returns
-    -------
-    dir_name : str
-        Name of the created directory.
-    lst_exe : str | None
-        Path to the LST executable (from config), or None.
+    Returns:
+        dir_name (str): Name of the created directory.
+        lst_exe (str | None): Path to the LST executable (from config), or None.
     """
     betr_str = f"{betr_loc:07.2f}".replace(".", "pt")
     dir_name = f"kc_{betr_str}"

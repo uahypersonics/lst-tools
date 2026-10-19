@@ -34,23 +34,15 @@ def script_build(
 ) -> Path:
     """Render a batch script and write it to *fpath*.
 
-    Parameters
-    ----------
-    cfg:
-        A :class:`ResolvedJob` (from :func:`hpc_configure`).
-    fpath:
-        Path where the script file is created.
-    args:
-        Command-line arguments for the solver.
-    lst_exe:
-        Name or path of the LST executable.
-    extra_env:
-        Additional environment variables to export.
+    Args:
+        cfg: A :class:`ResolvedJob` (from :func:`hpc_configure`).
+        fpath: Path where the script file is created.
+        args: Command-line arguments for the solver.
+        lst_exe: Name or path of the LST executable.
+        extra_env: Additional environment variables to export.
 
-    Returns
-    -------
-    Path
-        Absolute path to the written script file.
+    Returns:
+        Path: Absolute path to the written script file.
     """
     logger.debug("hpc config: %s", cfg)
     logger.debug("output path: %s", fpath)

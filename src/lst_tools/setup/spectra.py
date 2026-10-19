@@ -39,20 +39,14 @@ logger = logging.getLogger(__name__)
 def _resolve_x_locations(cfg) -> np.ndarray:
     """Read baseflow stations and return the x-locations selected by the config.
 
-    Parameters
-    ----------
-    cfg : Config
-        Validated configuration object.
+    Args:
+        cfg (Config): Validated configuration object.
 
-    Returns
-    -------
-    np.ndarray
-        Selected streamwise locations.
+    Returns:
+        np.ndarray: Selected streamwise locations.
 
-    Raises
-    ------
-    FileNotFoundError
-        If the baseflow file does not exist.
+    Raises:
+        FileNotFoundError: If the baseflow file does not exist.
     """
     baseflow_input = cfg.lst.io.baseflow_input
     if baseflow_input is not None:
@@ -100,15 +94,11 @@ def _resolve_x_locations(cfg) -> np.ndarray:
 def _resolve_frequencies(cfg) -> np.ndarray:
     """Build the frequency array from config ``[lst.params]``.
 
-    Returns
-    -------
-    np.ndarray
-        Frequency values in Hz.
+    Returns:
+        np.ndarray: Frequency values in Hz.
 
-    Raises
-    ------
-    ValueError
-        If ``f_min``, ``f_max``, or ``d_f`` is not specified.
+    Raises:
+        ValueError: If ``f_min``, ``f_max``, or ``d_f`` is not specified.
     """
     lst_params = cfg.lst.params
     if lst_params.f_min is None or lst_params.f_max is None or lst_params.d_f is None:
@@ -137,15 +127,11 @@ def _resolve_frequencies(cfg) -> np.ndarray:
 def _resolve_wavenumbers(cfg) -> np.ndarray:
     """Build the wavenumber array from config ``[lst.params]``.
 
-    Returns
-    -------
-    np.ndarray
-        Spanwise wavenumber values.
+    Returns:
+        np.ndarray: Spanwise wavenumber values.
 
-    Raises
-    ------
-    ValueError
-        If ``beta_s``, ``beta_e``, or ``d_beta`` is not specified.
+    Raises:
+        ValueError: If ``beta_s``, ``beta_e``, or ``d_beta`` is not specified.
     """
     lst_params = cfg.lst.params
     if lst_params.beta_s is None or lst_params.beta_e is None or lst_params.d_beta is None:
@@ -235,15 +221,11 @@ def spectra_setup(
     locations specified in the configuration file with frequency and wavenumber
     ranges from ``[lst.params]``.
 
-    Parameters
-    ----------
-    cfg : Mapping[str, Any], optional
-        Configuration dictionary. If None, will search for and load lst.cfg.
+    Args:
+        cfg (Mapping[str, Any], optional): Configuration dictionary. If None, will search for and load lst.cfg.
 
-    Returns
-    -------
-    list[Path]
-        Paths to the written input decks.
+    Returns:
+        list[Path]: Paths to the written input decks.
     """
     cfg = resolve_config(cfg)
     logger.info("configuration loaded and validated")

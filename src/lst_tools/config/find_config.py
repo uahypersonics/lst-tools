@@ -28,16 +28,12 @@ def find_config(search_path: str | Path = ".") -> Path | None:
     Iterates over a priority-ordered list of candidate filenames and
     returns the first one that exists on disk.
 
-    Parameters
-    ----------
-    search_path : str | Path, optional
-        Directory to scan (default: current working directory).
+    Args:
+        search_path (str | Path, optional): Directory to scan (default: current working directory).
 
-    Returns
-    -------
-    Path | None
-        Path to the first matching config file, or ``None`` if no
-        candidates are found.
+    Returns:
+        Path | None: Path to the first matching config file, or ``None`` if no
+            candidates are found.
     """
 
     # save search path in p -> if no search path was provided use default ./ (current run dir)

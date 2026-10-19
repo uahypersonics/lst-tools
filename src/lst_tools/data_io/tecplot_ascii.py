@@ -723,28 +723,19 @@ def write_tecplot_ascii(
 ) -> Path:
     """Write a single-zone Tecplot ASCII file.
 
-    Parameters
-    ----------
-    path : str or Path
-        Output file path.
-    variables : dict[str, ndarray]
-        Ordered mapping of variable names to arrays.  All arrays must
-        share the same shape.  1-D arrays produce an I-ordered zone;
-        2-D arrays (J, I) produce a structured IJ zone.
-    title : str, optional
-        Tecplot TITLE string.
-    zone : str, optional
-        Tecplot ZONE T string.
-    fmt : str, optional
-        Format spec applied to every value (default ``".10e"``).
-    progress_callback : callable, optional
-        Callback invoked as ``progress_callback(n)`` with the number of
-        points written in each chunk.
+    Args:
+        path (str or Path): Output file path.
+        variables (dict[str, ndarray]): Ordered mapping of variable names to arrays.  All arrays must
+            share the same shape.  1-D arrays produce an I-ordered zone;
+            2-D arrays (J, I) produce a structured IJ zone.
+        title (str, optional): Tecplot TITLE string.
+        zone (str, optional): Tecplot ZONE T string.
+        fmt (str, optional): Format spec applied to every value (default ``".10e"``).
+        progress_callback (callable, optional): Callback invoked as ``progress_callback(n)`` with the number of
+            points written in each chunk.
 
-    Returns
-    -------
-    Path
-        The path that was written.
+    Returns:
+        Path: The path that was written.
     """
     path = Path(path)
     names = list(variables.keys())

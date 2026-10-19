@@ -28,23 +28,16 @@ logger = logging.getLogger(__name__)
 def resolve_config(cfg: Mapping[str, Any] | None) -> Any:
     """Load config from disk if not provided and run consistency checks.
 
-    Parameters
-    ----------
-    cfg : Mapping or None
-        Already-loaded config, or None to auto-detect from the working
-        directory.
+    Args:
+        cfg (Mapping or None): Already-loaded config, or None to auto-detect from the working
+            directory.
 
-    Returns
-    -------
-    Config
-        Validated configuration object.
+    Returns:
+        Config: Validated configuration object.
 
-    Raises
-    ------
-    FileNotFoundError
-        If no config file can be found.
-    ValueError
-        If the consistency check finds errors.
+    Raises:
+        FileNotFoundError: If no config file can be found.
+        ValueError: If the consistency check finds errors.
     """
     if cfg is None:
         logger.info("configuration not provided, attempting to load...")
@@ -81,15 +74,11 @@ def resolve_config(cfg: Mapping[str, Any] | None) -> Any:
 def read_baseflow_stations(baseflow_input: str | Path) -> np.ndarray:
     """Read streamwise station locations from a LASTRAC meanflow binary.
 
-    Parameters
-    ----------
-    baseflow_input : str or Path
-        Path to the ``meanflow.bin`` file.
+    Args:
+        baseflow_input (str or Path): Path to the ``meanflow.bin`` file.
 
-    Returns
-    -------
-    np.ndarray
-        1-D array of station *s*-coordinates.
+    Returns:
+        np.ndarray: 1-D array of station *s*-coordinates.
     """
     path = Path(str(baseflow_input))
     fio = LastracReader(path, endianness="<")
@@ -126,26 +115,20 @@ def read_baseflow_profiles(
     but profile vectors are only extracted at the sampled indices.
     All other stations have their six records skipped.
 
-    Parameters
-    ----------
-    baseflow_input : str or Path
-        Path to the ``meanflow.bin`` file.
-    n_samples : int, optional
-        Target number of stations to sample (default 50).
-        If the file has fewer stations, all are read.
-    spacing : ``"index"`` or ``"x"``, optional
-        How to distribute the sampled stations (default ``"index"``).
-        ``"index"`` picks indices equidistant in index space.
-        ``"x"`` picks stations equidistant in the streamwise coordinate,
-        which requires a two-pass read of the file.
+    Args:
+        baseflow_input (str or Path): Path to the ``meanflow.bin`` file.
+        n_samples (int, optional): Target number of stations to sample (default 50).
+            If the file has fewer stations, all are read.
+        spacing (``"index"`` or ``"x"``, optional): How to distribute the sampled stations (default ``"index"``).
+            ``"index"`` picks indices equidistant in index space.
+            ``"x"`` picks stations equidistant in the streamwise coordinate,
+            which requires a two-pass read of the file.
 
-    Returns
-    -------
-    dict
-        Keys: ``x`` (1-D array of sampled s-coordinates),
-        ``eta`` (list of 1-D arrays), ``uvel`` (list of 1-D arrays),
-        ``vvel`` (list of 1-D arrays), ``wvel`` (list of 1-D arrays),
-        ``temp`` (list of 1-D arrays), ``stat_uvel`` (list of floats).
+    Returns:
+        dict: Keys: ``x`` (1-D array of sampled s-coordinates),
+            ``eta`` (list of 1-D arrays), ``uvel`` (list of 1-D arrays),
+            ``vvel`` (list of 1-D arrays), ``wvel`` (list of 1-D arrays),
+            ``temp`` (list of 1-D arrays), ``stat_uvel`` (list of floats).
     """
 
     # ensure input is a Path and open with LastracReader
@@ -250,14 +233,10 @@ def scaffold_case_dir(
 ) -> None:
     """Create a case directory and populate it with meanflow and executable.
 
-    Parameters
-    ----------
-    case_dir : str or Path
-        Target directory (created if it does not exist).
-    meanflow_src : str or Path
-        Path to the meanflow binary to copy.
-    lst_exe : str or None
-        Path to the LST executable, or None to skip copying.
+    Args:
+        case_dir (str or Path): Target directory (created if it does not exist).
+        meanflow_src (str or Path): Path to the meanflow binary to copy.
+        lst_exe (str or None): Path to the LST executable, or None to skip copying.
     """
     case_dir = Path(case_dir)
     case_dir.mkdir(parents=True, exist_ok=True)
@@ -301,23 +280,16 @@ def write_launcher_script(
 ) -> Path:
     """Write an executable bash script that submits or runs each case.
 
-    Parameters
-    ----------
-    dirs : list[str]
-        Case directory names.
-    script_name : str
-        Output file name.
-    submit_cmd : str or None
-        HPC submit command (``qsub``, ``sbatch``). If None a local
-        direct-execution line is emitted instead.
-    fname_run_script : str or None
-        Name of the HPC run script inside each directory.  Ignored when
-        *submit_cmd* is None.
+    Args:
+        dirs (list[str]): Case directory names.
+        script_name (str): Output file name.
+        submit_cmd (str or None): HPC submit command (``qsub``, ``sbatch``). If None a local
+            direct-execution line is emitted instead.
+        fname_run_script (str or None): Name of the HPC run script inside each directory.  Ignored when
+            *submit_cmd* is None.
 
-    Returns
-    -------
-    Path
-        Path to the written launcher script.
+    Returns:
+        Path: Path to the written launcher script.
     """
     out = Path(script_name)
 

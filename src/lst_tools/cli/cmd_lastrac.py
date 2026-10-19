@@ -136,11 +136,9 @@ def cmd_lastrac(
        base flow to ``./debug/debug_base_flow.dat``.
     4. Run ``convert_meanflow()`` to produce ``meanflow.bin``.
 
-    Parameters
-    ----------
-    cfg : Path | None
-        Explicit path to a config file.  When *None*, the standard
-        config discovery logic is used (``read_config()``).
+    Args:
+        cfg (Path | None): Explicit path to a config file.  When *None*, the standard
+            config discovery logic is used (``read_config()``).
     """
 
     # resolve verbose diagnostics state from logger configuration

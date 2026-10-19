@@ -35,15 +35,11 @@ def hpc_configure(
 ) -> ResolvedJob:
     """Detect environment and build a :class:`ResolvedJob`.
 
-    Parameters
-    ----------
-    cfg:
-        Full application config (``Config`` dataclass *or* plain dict).
-    set_defaults:
-        Apply generous defaults (``nodes=10``, ``time=1.0``).
-    nodes_override, ntasks_per_node_override, time_override:
-        Programmatic overrides — used by callers like *tracking_setup*
-        that compute optimal values before building the script.
+    Args:
+        cfg: Full application config (``Config`` dataclass *or* plain dict).
+        set_defaults: Apply generous defaults (``nodes=10``, ``time=1.0``).
+        nodes_override, ntasks_per_node_override, time_override: Programmatic overrides — used by callers like *tracking_setup*
+            that compute optimal values before building the script.
     """
     if hasattr(cfg, "to_dict"):
         cfg = cfg.to_dict()

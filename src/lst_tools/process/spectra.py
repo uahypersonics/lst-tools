@@ -1374,15 +1374,11 @@ def spectra_process(
     spectral data across frequencies and wavenumbers, and preparing
     data for visualization.
 
-    Parameters
-    ----------
-    cfg : Optional[Mapping[str, Any]]
-        Configuration dictionary or path to config file
+    Args:
+        cfg (Optional[Mapping[str, Any]]): Configuration dictionary or path to config file
 
-    Returns
-    -------
-    Path
-        Path to the processed results file
+    Returns:
+        Path: Path to the processed results file
     """
 
     # --------------------------------------------------

@@ -438,21 +438,15 @@ def cmd_init(
          values are preserved.
      5. Write the final dict to *out* as TOML.
 
-    Parameters
-    ----------
-    out : Path
-        Destination path for the config file (default: ``lst.cfg``).
-    force : bool
-        If *True*, overwrite an existing file without prompting.
-    geometry : GeometryPreset | None
-        Optional geometry preset to pre-populate the config.
-    flow_path : Path | None
-        Explicit path to a ``flow_conditions.dat`` or ``flow_conditions.json``
-        file.  When a geometry
-        preset is selected and *flow_path* is not given, the current directory
-        is searched for ``flow_conditions.dat`` automatically.
-    merge : bool
-        Merge the existing config at *out* into the generated scaffold.
+    Args:
+        out (Path): Destination path for the config file (default: ``lst.cfg``).
+        force (bool): If *True*, overwrite an existing file without prompting.
+        geometry (GeometryPreset | None): Optional geometry preset to pre-populate the config.
+        flow_path (Path | None): Explicit path to a ``flow_conditions.dat`` or ``flow_conditions.json``
+            file.  When a geometry
+            preset is selected and *flow_path* is not given, the current directory
+            is searched for ``flow_conditions.dat`` automatically.
+        merge (bool): Merge the existing config at *out* into the generated scaffold.
     """
 
     # coerce flow_path to a Path (default: flow_conditions.dat in cwd)

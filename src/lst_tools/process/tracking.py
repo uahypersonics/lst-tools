@@ -48,33 +48,23 @@ def tracking_process(
     """
     Process LST tracking calculation results.
 
-    Parameters
-    ----------
-    cfg : Optional[Config]
-        Configuration object. Processing defaults come from
-        ``cfg.processing.tracking`` (gate_tol, min_valid, peak_order,
-        interpolate).  CLI flags override config values.
-    do_maxima : bool
-        If True, run ridge-line maxima extraction for every kc_* case.
-    do_volume : bool
-        If True, assemble 2-D slices into a 3-D volume file.
-    work_dir : Optional[Path]
-        Working directory containing kc_* subdirectories.
-        Defaults to the current working directory.
-    kc_dirs : Optional[list[Path]]
-        Specific kc_* directories to process. If None, discovers all
-        kc_* directories in work_dir.
-    interpolate : Optional[bool]
-        Use parabolic interpolation for peak refinement.
-        If None, falls back to ``cfg.processing.tracking.interpolate``.
-    plain_output : bool
-        If True, use line-by-line text output instead of rich progress bars
-        where supported.
+    Args:
+        cfg (Optional[Config]): Configuration object. Processing defaults come from
+            ``cfg.processing.tracking`` (gate_tol, min_valid, peak_order,
+            interpolate).  CLI flags override config values.
+        do_maxima (bool): If True, run ridge-line maxima extraction for every kc_* case.
+        do_volume (bool): If True, assemble 2-D slices into a 3-D volume file.
+        work_dir (Optional[Path]): Working directory containing kc_* subdirectories.
+            Defaults to the current working directory.
+        kc_dirs (Optional[list[Path]]): Specific kc_* directories to process. If None, discovers all
+            kc_* directories in work_dir.
+        interpolate (Optional[bool]): Use parabolic interpolation for peak refinement.
+            If None, falls back to ``cfg.processing.tracking.interpolate``.
+        plain_output (bool): If True, use line-by-line text output instead of rich progress bars
+            where supported.
 
-    Returns
-    -------
-    Path
-        Path to the working directory.
+    Returns:
+        Path: Path to the working directory.
     """
 
     # --------------------------------------------------

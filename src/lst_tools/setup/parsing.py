@@ -62,23 +62,16 @@ def estimate_freq(
     M ≤ 4 (first-mode dominant).  The median :math:`\delta` across
     sampled stations is used for robustness.
 
-    Parameters
-    ----------
-    samples : dict
-        Output of :func:`read_baseflow_profiles` with keys
-        ``eta``, ``uvel``, ``vvel``, ``wvel``, ``temp``.
-    mach : float
-        Edge Mach number from config.
-    gamma : float, optional
-        Ratio of specific heats (default 1.4).
-    uvel_inf : float, optional
-        Freestream velocity used to redimensionalize the
-        nondimensional edge velocity (default 1.0).
+    Args:
+        samples (dict): Output of :func:`read_baseflow_profiles` with keys
+            ``eta``, ``uvel``, ``vvel``, ``wvel``, ``temp``.
+        mach (float): Edge Mach number from config.
+        gamma (float, optional): Ratio of specific heats (default 1.4).
+        uvel_inf (float, optional): Freestream velocity used to redimensionalize the
+            nondimensional edge velocity (default 1.0).
 
-    Returns
-    -------
-    float
-        Estimated f_max.
+    Returns:
+        float: Estimated f_max.
     """
 
     gm1 = gamma - 1.0
@@ -176,20 +169,14 @@ def auto_fill_parsing(cfg: Any, *, force: bool = False, cfg_path: str | Path | N
     **Wavenumber sweep** (``beta_s``, ``beta_e``, ``d_beta``):
     Uses sensible non-dimensional defaults.
 
-    Parameters
-    ----------
-    cfg : Config
-        A validated configuration object (dataclass).
-    force : bool, optional
-        When ``True``, overwrite all parameters even if already set.
-    cfg_path : str or Path, optional
-        Path to the config file on disk.  When provided the config is
-        written back with ``overwrite=True`` after filling.
+    Args:
+        cfg (Config): A validated configuration object (dataclass).
+        force (bool, optional): When ``True``, overwrite all parameters even if already set.
+        cfg_path (str or Path, optional): Path to the config file on disk.  When provided the config is
+            written back with ``overwrite=True`` after filling.
 
-    Returns
-    -------
-    bool
-        ``True`` if at least one field was filled, ``False`` otherwise.
+    Returns:
+        bool: ``True`` if at least one field was filled, ``False`` otherwise.
     """
 
     # alias for parameters
@@ -350,25 +337,17 @@ def parsing_setup(
 
     """Create a minimal parsing case in *out_dir*.
 
-    Parameters
-    ----------
-    cfg : Mapping[str, Any], optional
-        Already-loaded configuration dictionary.
-    out_dir : str | Path, optional
-        Directory to write the input deck into. Created if missing.
-    out_name : str, optional
-        File name for the input deck (default: "lst_input_parsing.dat").
-    auto_fill : bool, optional
-        When True, derive ``x_s``, ``x_e``, and ``i_step`` from the
-        meanflow binary for any fields that are still ``None``.
-    cfg_path : str | Path, optional
-        Path to the config file on disk.  Used by ``--auto-fill`` to
-        write the updated config back so the user can inspect it.
+    Args:
+        cfg (Mapping[str, Any], optional): Already-loaded configuration dictionary.
+        out_dir (str | Path, optional): Directory to write the input deck into. Created if missing.
+        out_name (str, optional): File name for the input deck (default: "lst_input_parsing.dat").
+        auto_fill (bool, optional): When True, derive ``x_s``, ``x_e``, and ``i_step`` from the
+            meanflow binary for any fields that are still ``None``.
+        cfg_path (str | Path, optional): Path to the config file on disk.  Used by ``--auto-fill`` to
+            write the updated config back so the user can inspect it.
 
-    Returns
-    -------
-    Path
-        Path to the written input deck.
+    Returns:
+        Path: Path to the written input deck.
     """
 
     logger.info("preparing lst code input file for parsing step")

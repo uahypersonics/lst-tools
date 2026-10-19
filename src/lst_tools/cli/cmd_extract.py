@@ -97,10 +97,8 @@ def cmd_extract(
 ) -> None:
     """Extract wall-normal profiles from a Tecplot FE-quadrilateral slice.
 
-    Parameters
-    ----------
-    input_file : Path | None
-        Positional input file argument. Overrides ``[extract] input_file`` in cfg.
+    Args:
+        input_file (Path | None): Positional input file argument. Overrides ``[extract] input_file`` in cfg.
     """
 
     # check if verbose is enabled

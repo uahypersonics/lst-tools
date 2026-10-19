@@ -144,21 +144,17 @@ def read_flow_conditions(fpath: str | Path) -> dict[str, float]:
     We favor the first numeric value on the line (expected SI). Lines with
     multiple numbers like "ptot: <Pa> / <psi>" will yield the first (Pa).
 
-    Parameters
-    ----------
-    fpath : str | Path
-        Path to the flow_conditions.dat file.
+    Args:
+        fpath (str | Path): Path to the flow_conditions.dat file.
 
-    Returns
-    -------
-    dict[str, float]
-        A mapping like:
-        {
-          "mach": 5.3, "re1": 1.79e7, "gamma": 1.4, "cp": 1005.0, "cv": 717.9,
-          "rgas": 287.15, "pres_0": ..., "temp_0": ..., "pres_inf": ...,
-          "temp_inf": ..., "dens_inf": ..., "uvel_inf": ...
-        }
-        Only keys that were found are returned.
+    Returns:
+        dict[str, float]: A mapping like:
+            {
+              "mach": 5.3, "re1": 1.79e7, "gamma": 1.4, "cp": 1005.0, "cv": 717.9,
+              "rgas": 287.15, "pres_0": ..., "temp_0": ..., "pres_inf": ...,
+              "temp_inf": ..., "dens_inf": ..., "uvel_inf": ...
+            }
+            Only keys that were found are returned.
     """
 
     # ensure fpath is a Path object
