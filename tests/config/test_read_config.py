@@ -1,5 +1,4 @@
 import os
-import sys
 import tempfile
 from unittest import mock
 
@@ -162,52 +161,3 @@ class TestReadConfig:
             assert config.hpc.nodes is None
         finally:
             os.unlink(config_file)
-
-    def test_tomllib_import(self):
-        with mock.patch.dict(
-            "sys.modules",
-            {"tomllib": mock.MagicMock(__name__="tomllib"), "tomli": None},
-        ):
-            for mod in ("lst_tools.config.schema", "lst_tools.config.read_config"):
-                if mod in sys.modules:
-                    del sys.modules[mod]
-
-            import lst_tools.config.schema as schema
-
-            assert schema._toml.__name__ == "tomllib"
-
-    def test_tomli_import(self):
-        with mock.patch.dict(
-            "sys.modules", {"tomllib": None, "tomli": mock.MagicMock(__name__="tomli")}
-        ):
-            for mod in ("lst_tools.config.schema", "lst_tools.config.read_config"):
-                if mod in sys.modules:
-                    del sys.modules[mod]
-
-            import lst_tools.config.schema as schema
-
-            assert schema._toml.__name__ == "tomli"
-
-    def test_toml_missing_import(self):
-        # Save the original modules
-        original_tomllib = sys.modules.get("tomllib")
-        original_tomli = sys.modules.get("tomli")
-
-        # Remove the modules and the module that imports them
-        for module in ["tomllib", "tomli", "lst_tools.config.schema", "lst_tools.config.read_config"]:
-            if module in sys.modules:
-                del sys.modules[module]
-
-        # Mock both imports to raise ImportError
-        with mock.patch.dict("sys.modules", {"tomllib": None, "tomli": None}):
-            with pytest.raises(
-                ImportError, match="lst_tools.config requires 'tomli' on Python <3.11"
-            ):
-                # This import will trigger the module-level import code
-                import lst_tools.config.schema  # noqa
-
-        # Cleanup: restore original modules if they existed
-        if original_tomllib is not None:
-            sys.modules["tomllib"] = original_tomllib
-        if original_tomli is not None:
-            sys.modules["tomli"] = original_tomli

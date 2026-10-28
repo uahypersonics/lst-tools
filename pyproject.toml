@@ -9,12 +9,18 @@ description = "Python toolkit with pre- and postprocessing utilities for linear 
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 dynamic = ["version"]
-# require at least python 3.10
-requires-python = ">=3.10"
+# require at least python 3.11
+requires-python = ">=3.11"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
 dependencies = [
   "cfd-io>=0.1.1",
   "numpy>=1.22",
-  "tomli>=2.0; python_version < '3.11'",
   "tomli-w>=1.0",
   "scipy>=1.15",
   "typer>=0.9.0",

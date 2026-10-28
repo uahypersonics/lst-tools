@@ -8,7 +8,7 @@ Pre- and post-processing toolkit for Linear Stability Theory (LST) analyses of h
 [![PyPI](https://img.shields.io/pypi/v/lst-tools)](https://pypi.org/project/lst-tools/)
 [![Docs](https://img.shields.io/badge/docs-zensical-blue)](https://uahypersonics.github.io/lst-tools/)
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-≥3.10-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-≥3.11-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 ## Install

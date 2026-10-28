@@ -19,6 +19,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import re
+import tomllib as _toml
 from pathlib import Path
 from typing import Any
 
@@ -26,21 +27,6 @@ from typing import Any
 # set up logger
 # --------------------------------------------------
 logger = logging.getLogger(__name__)
-
-
-# --------------------------------------------------
-# toml loader guards for Python <3.11 (tomli) and 3.11+ (tomllib)
-# --------------------------------------------------
-try:
-    import tomllib as _toml
-except ModuleNotFoundError:
-    try:
-        import tomli as _toml  # type: ignore[no-redef]
-    except ModuleNotFoundError as e:
-        raise ImportError(
-            "lst_tools.config requires 'tomli' on Python <3.11. "
-            "Install with: pip install tomli"
-        ) from e
 
 
 # --------------------------------------------------
