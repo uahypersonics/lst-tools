@@ -57,6 +57,8 @@ class TestConvertMeanflow:
                 "i_s": 0,
                 "i_e": None,
                 "d_i": 1,
+                # the mock baseflow is already non-dimensional
+                "nondimensionalize": False,
             },
         })
 

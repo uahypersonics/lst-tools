@@ -47,8 +47,14 @@ def test_cmd_extract_requires_stations(
     assert "extraction stations required" in captured.err
 
 
-def test_cmd_extract_forwards_eta_controls_with_all_wall_points(tmp_path: Path) -> None:
-    """Forward eta controls and allow all-wall mode without configured stations."""
+@pytest.mark.parametrize("reconstructed_from_cells", [False, True])
+def test_cmd_extract_forwards_eta_controls_with_all_wall_points(
+    tmp_path: Path, reconstructed_from_cells: bool
+) -> None:
+    """Forward eta controls and allow all-wall mode without configured stations.
+
+    Also checks the wall conditions are applied for cell-centred input only.
+    """
     # build a minimal input path and extraction configuration
     input_path = tmp_path / "slice.dat"
     input_path.write_text("fixture", encoding="utf-8")
@@ -70,7 +76,6 @@ def test_cmd_extract_forwards_eta_controls_with_all_wall_points(tmp_path: Path) 
         d_x=None,
         snap_to_wall=False,
         all_wall_points=True,
-        nondimensionalize=False,
     )
     flow_config = SimpleNamespace(
         mach=None,
@@ -96,7 +101,9 @@ def test_cmd_extract_forwards_eta_controls_with_all_wall_points(tmp_path: Path) 
         cell={},
         connectivity=np.zeros((1, 4), dtype=int),
     )
-    mesh_sampler = SimpleNamespace(nodal_fields={})
+    mesh_sampler = SimpleNamespace(
+        nodal_fields={}, reconstructed_from_cells=reconstructed_from_cells
+    )
     profiles = SampledProfiles(
         station_x=np.array([0.1]),
         station_y=np.array([-0.1]),
@@ -135,11 +142,21 @@ def test_cmd_extract_forwards_eta_controls_with_all_wall_points(tmp_path: Path) 
             "lst_tools.cli.cmd_extract.sample_profiles",
             return_value=profiles,
         ) as sample_mock,
-        patch("lst_tools.cli.cmd_extract.detect_dimensional", return_value=False),
         patch("lst_tools.cli.cmd_extract.write_profiles_tecplot"),
-        patch("lst_tools.cli.cmd_extract.write_profiles_hdf5"),
+        patch("lst_tools.cli.cmd_extract.write_profiles_hdf5") as hdf5_mock,
+        patch(
+            "lst_tools.cli.cmd_extract.apply_wall_conditions",
+            return_value=mesh_sampler,
+        ) as wall_mock,
     ):
         cmd_extract(input_path, surface="upper")
+
+    # validate extract writes the sampled (dimensional) profiles unchanged; scaling
+    # happens only in the meanflow conversion
+    assert hdf5_mock.call_args.args[1] is profiles
+
+    # validate the wall conditions run for cell-centred input only
+    assert wall_mock.called is reconstructed_from_cells
 
     # validate every profile-grid control at the CLI boundary
     sample_kwargs = sample_mock.call_args.kwargs

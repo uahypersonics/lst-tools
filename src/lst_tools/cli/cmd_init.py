@@ -181,8 +181,22 @@ def _inject_init_comments(config_text: str) -> str:
         ("d_i = 1", "station stride"),
         ("set_v_zero = true", "zero wall-normal velocity in the converted meanflow"),
         (
-            "nondimensionalize = false",
-            "scale dimensional flow fields by freestream references; requires correct flow_conditions",
+            "nondimensionalize = true",
+            "divide the profiles by the reference state below (extract writes dimensional profiles)",
+        ),
+        (
+            'reference = "freestream"',
+            "reference state for the profiles and every LASTRAC station header: "
+            "freestream = [flow_conditions] uvel_inf, temp_inf, dens_inf, pres_inf, re1; "
+            "custom = uvel_ref, temp_ref, dens_ref, re1_ref below",
+        ),
+        ('uvel_ref = ""', "custom reference velocity [m/s] (reference = custom only)"),
+        ('temp_ref = ""', "custom reference temperature [K] (reference = custom only)"),
+        ('dens_ref = ""', "custom reference density [kg/m^3] (reference = custom only)"),
+        (
+            're1_ref = ""',
+            "custom unit reynolds number dens_ref * uvel_ref / mu(temp_ref) [1/m] "
+            "(reference = custom only)",
         ),
         # lst.solver
         ("type = 1", "solver type: 1=global parallel, 2=tracking, 3=3-D tracking"),

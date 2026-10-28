@@ -129,7 +129,8 @@ class TestInitCommand:
         call_kwargs = mock_write_config.call_args
         cfg_data = call_kwargs.kwargs.get("cfg_data") or call_kwargs[1].get("cfg_data")
         assert cfg_data is not None
-        assert cfg_data["meanflow_conversion"]["nondimensionalize"] is False
+        assert cfg_data["meanflow_conversion"]["nondimensionalize"] is True
+        assert cfg_data["meanflow_conversion"]["reference"] == "freestream"
         assert "tracking" in cfg_data["processing"]
         assert "spectra" in cfg_data["processing"]
         assert "parsing" not in cfg_data["processing"]

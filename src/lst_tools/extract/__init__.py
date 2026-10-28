@@ -11,10 +11,11 @@ from ._fequad import (
     write_profiles_tecplot,
     write_wall_profile_tecplot,
 )
-from ._normalize import detect_dimensional, normalize_profiles
+from ._wall_state import apply_wall_conditions
 
 __all__ = [
     "SampledProfiles",
+    "apply_wall_conditions",
     "extract_lower_wall",
     "build_quad_mesh_sampler",
     "sample_profiles",
@@ -23,6 +24,4 @@ __all__ = [
     "write_profiles_hdf5",
     "write_profiles_tecplot",
     "write_wall_profile_tecplot",
-    "detect_dimensional",
-    "normalize_profiles",
 ]

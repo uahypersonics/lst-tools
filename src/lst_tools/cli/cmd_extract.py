@@ -46,8 +46,8 @@ from lst_tools.extract import (
     write_profiles_tecplot,
     write_wall_profile_tecplot,
 )
-from lst_tools.extract._normalize import detect_dimensional, normalize_profiles
 from lst_tools.extract._profile import default_eta_distribution, default_n_eta
+from lst_tools.extract._wall_state import apply_wall_conditions
 
 # --------------------------------------------------
 # set up logger
@@ -284,6 +284,17 @@ def cmd_extract(
             float(wall_x[-1]),
         )
 
+        # cell-centred input (e.g. US3D): the reconstructed wall-node values are
+        # first-cell averages; replace them with the wall state (no-slip, extrapolated
+        # temperature, zero-gradient pressure) before sampling any profile
+        if mesh_sampler.reconstructed_from_cells:
+            mesh_sampler = apply_wall_conditions(
+                mesh_sampler, dataset.cell, wall_x, wall_y, rgas
+            )
+            typer.echo(
+                f"cell-centred input: applied wall conditions at {wall_x.size} wall nodes"
+            )
+
         # write the extracted wall curve diagnostic (only if configured)
         if fpath_wall is not None:
             write_wall_profile_tecplot(fpath_wall, wall_x, wall_y)
@@ -335,40 +346,16 @@ def cmd_extract(
             if attr_value is not None:
                 freestream_attrs[attr_name] = float(attr_value)
 
-        # detect dimensional profiles and optionally normalize
-        is_dimensional = detect_dimensional(raw_profiles)
-        if is_dimensional and not ext_cfg.nondimensionalize:
-            typer.echo("", err=True)
-            typer.echo(
-                typer.style(
-                    "WARNING: profiles appear dimensional (mean edge velocity > 5 m/s)"
-                    " but [extract] nondimensionalize = false."
-                    " Set nondimensionalize = true to divide by edge values before writing HDF5.",
-                    fg=typer.colors.YELLOW, bold=True,
-                ),
-                err=True,
-            )
-            typer.echo("", err=True)
-        profiles_to_write = raw_profiles
-        nondim_profiles_path: Path | None = None
-        if is_dimensional and ext_cfg.nondimensionalize:
-            profiles_to_write, _ = normalize_profiles(raw_profiles)
-            # path for the non-dimensional Tecplot output
-            nondim_profiles_path = resolved_profiles.with_stem(
-                resolved_profiles.stem + "_nondimensional"
-            )
+        # profiles stay dimensional here; nondimensionalization happens in one place,
+        # the meanflow conversion, with the same reference state it writes into the
+        # LASTRAC station headers
 
-        # write Tecplot profiles file — dimensional, always written for inspection
+        # write Tecplot profiles file for inspection
         write_profiles_tecplot(resolved_profiles, raw_profiles)
         logger.debug("profiles tecplot written: %s", resolved_profiles)
 
-        # write non-dimensional Tecplot file when normalization was applied
-        if nondim_profiles_path is not None:
-            write_profiles_tecplot(nondim_profiles_path, profiles_to_write)
-            logger.debug("non-dimensional profiles tecplot written: %s", nondim_profiles_path)
-
         # write HDF5 baseflow file
-        write_profiles_hdf5(fpath_out, profiles_to_write, freestream_attrs)
+        write_profiles_hdf5(fpath_out, raw_profiles, freestream_attrs)
 
         # determine the surface that was actually extracted (may differ from the
         # requested surface when pick_wall_branch auto-falls back on a one-sided mesh)
@@ -377,8 +364,6 @@ def cmd_extract(
         # print summary for the user
         typer.echo(f"{fpath_inp} -> {fpath_out}")
         typer.echo(f"  profiles (dimensional): {resolved_profiles}")
-        if nondim_profiles_path is not None:
-            typer.echo(f"  profiles (non-dim):     {nondim_profiles_path}")
         typer.echo(f"  stations: {stations.size}")
         typer.echo(f"  points per profile: {raw_profiles.eta.size}")
         typer.echo(f"  surface: {actual_surface}")

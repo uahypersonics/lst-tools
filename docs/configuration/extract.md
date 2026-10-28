@@ -2,6 +2,11 @@
 
 Set extraction outputs, station locations, and wall-normal resolution for `lst-tools extract`.
 
+Extracted profiles are always written dimensional, as sampled from the CFD
+solution. Nondimensionalization happens in one place, the
+[meanflow conversion](meanflow-conversion.md), with the same reference state it
+writes into the LASTRAC station headers.
+
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `hdf5_out` | `str` | `extracted_baseflow.hdf5` | Output HDF5 baseflow file path |

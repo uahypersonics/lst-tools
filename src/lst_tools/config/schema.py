@@ -297,19 +297,42 @@ class MeanflowConversion(_ConfigBase):
     i_e: int | None = None
     d_i: int = 1
     set_v_zero: bool = True
-    nondimensionalize: bool = False
+    # divide the profiles by the reference state below (the only place lst-tools
+    # nondimensionalizes; extract always writes dimensional profiles)
+    nondimensionalize: bool = True
+    # reference state for the profiles and every LASTRAC station header: "freestream"
+    # uses [flow_conditions]; "custom" uses uvel_ref, temp_ref, dens_ref and re1_ref
+    reference: str = "freestream"
+    uvel_ref: float | None = None
+    temp_ref: float | None = None
+    dens_ref: float | None = None
+    re1_ref: float | None = None
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> MeanflowConversion:
         """Build a ``MeanflowConversion`` from a plain dict."""
         _svz = d.get("set_v_zero")
         _nd = d.get("nondimensionalize")
+
+        # validate the reference selection
+        reference = _opt_str(d.get("reference")) or "freestream"
+        reference = reference.lower()
+        if reference not in ("freestream", "custom"):
+            raise ValueError(
+                f"meanflow_conversion.reference must be 'freestream' or 'custom', got {reference!r}"
+            )
+
         return cls(
             i_s=int(d.get("i_s", 0)),
             i_e=_opt_int(d.get("i_e")),
             d_i=int(d.get("d_i", 1)),
             set_v_zero=_coerce_bool(_svz) if _svz is not None else True,
-            nondimensionalize=_coerce_bool(_nd) if _nd is not None else False,
+            nondimensionalize=_coerce_bool(_nd) if _nd is not None else True,
+            reference=reference,
+            uvel_ref=_opt_float(d.get("uvel_ref")),
+            temp_ref=_opt_float(d.get("temp_ref")),
+            dens_ref=_opt_float(d.get("dens_ref")),
+            re1_ref=_opt_float(d.get("re1_ref")),
         )
 
 
@@ -747,10 +770,6 @@ class ExtractConfig(_ConfigBase):
     snap_to_wall: bool = False
     # extract one profile at every point on the selected wall branch
     all_wall_points: bool = False
-    # when True (default), divide profiles by their local edge values before
-    # writing HDF5.  Set to False only when profiles are already non-dimensional.
-    # a warning is issued when profiles appear dimensional but this flag is False.
-    nondimensionalize: bool = True
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ExtractConfig:
@@ -841,10 +860,6 @@ class ExtractConfig(_ConfigBase):
         for key in ("snap_to_wall", "all_wall_points"):
             if key in d:
                 kw[key] = _coerce_bool(d[key])
-
-        # validate nondimensionalize flag
-        if "nondimensionalize" in d:
-            kw["nondimensionalize"] = _coerce_bool(d["nondimensionalize"])
 
         return cls(**kw)
 

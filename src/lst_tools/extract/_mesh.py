@@ -161,8 +161,10 @@ def build_quad_mesh_sampler(
         f in existing_nodal_fields for f in REQUIRED_FIELDS
     ):
         nodal_fields = {f: existing_nodal_fields[f] for f in REQUIRED_FIELDS}
+        reconstructed_from_cells = False
         logger.debug("using existing nodal fields (no reconstruction needed)")
     else:
+        reconstructed_from_cells = True
         selected_fields = {field_name: cell_fields[field_name] for field_name in REQUIRED_FIELDS}
         nodal_fields = reconstruct_nodal_fields(
             nodal_x,
@@ -238,6 +240,7 @@ def build_quad_mesh_sampler(
         n_bin_x=n_bin_x,
         n_bin_y=n_bin_y,
         bin_to_cells=bin_to_cells,
+        reconstructed_from_cells=reconstructed_from_cells,
     )
 
 

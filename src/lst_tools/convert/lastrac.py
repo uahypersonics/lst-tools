@@ -11,6 +11,7 @@ ASCII) meanflow file.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +36,97 @@ logger = logging.getLogger(__name__)
 
 # velocity threshold separating dimensional (m/s) from non-dimensional (u/u_e)
 _DIMENSIONAL_VELOCITY_THRESHOLD = 5.0
+
+# --------------------------------------------------
+# reference state for nondimensionalization and the station headers
+# --------------------------------------------------
+@dataclass(frozen=True, slots=True)
+class ReferenceState:
+    """One reference state: it scales the profiles and is written into every station header.
+
+    LASTRAC reads the profiles' scale from each station header, so the profiles must be
+    divided by exactly these values; pressure is divided by dens * uvel**2.
+
+    Attributes:
+        uvel: Reference velocity [m/s].
+        temp: Reference temperature [K].
+        dens: Reference density [kg/m^3].
+        pres: Reference static pressure for the file header [Pa].
+        re1: Unit Reynolds number of the reference state, dens * uvel / mu(temp) [1/m].
+    """
+
+    uvel: float
+    temp: float
+    dens: float
+    pres: float
+    re1: float
+
+
+def resolve_reference_state(cfg: Config) -> ReferenceState:
+    """Build the reference state selected by [meanflow_conversion] reference.
+
+    "freestream" (default) takes uvel_inf, temp_inf, dens_inf, pres_inf and re1 from
+    [flow_conditions]. "custom" takes uvel_ref, temp_ref, dens_ref and re1_ref from
+    [meanflow_conversion]; its pressure follows from the perfect-gas law with
+    [flow_conditions] rgas.
+
+    Args:
+        cfg: lst-tools configuration.
+
+    Returns:
+        Reference state with all values positive.
+
+    Raises:
+        ValueError: If a required value is missing or not positive.
+    """
+
+    # pick the source of the reference values
+    mc_cfg = cfg.meanflow_conversion
+    fc_cfg = cfg.flow_conditions
+    if mc_cfg.reference == "custom":
+        values = {
+            "meanflow_conversion.uvel_ref": mc_cfg.uvel_ref,
+            "meanflow_conversion.temp_ref": mc_cfg.temp_ref,
+            "meanflow_conversion.dens_ref": mc_cfg.dens_ref,
+            "meanflow_conversion.re1_ref": mc_cfg.re1_ref,
+        }
+    else:
+        values = {
+            "flow_conditions.uvel_inf": fc_cfg.uvel_inf,
+            "flow_conditions.temp_inf": fc_cfg.temp_inf,
+            "flow_conditions.dens_inf": fc_cfg.dens_inf,
+            "flow_conditions.re1": fc_cfg.re1,
+            "flow_conditions.pres_inf": fc_cfg.pres_inf,
+        }
+
+    # validate: every value present and positive
+    missing = [name for name, value in values.items() if value is None]
+    if missing:
+        raise ValueError(
+            f"reference = '{mc_cfg.reference}' needs these fields: {', '.join(missing)}"
+        )
+    for name, value in values.items():
+        if float(value) <= 0.0:
+            raise ValueError(f"{name} must be positive, got {float(value):.6e}")
+
+    # assemble; a custom state gets its pressure from the perfect-gas law
+    value_list = [float(value) for value in values.values()]
+    uvel, temp, dens, re1 = value_list[:4]
+    if mc_cfg.reference == "custom":
+        pres = dens * float(fc_cfg.rgas) * temp
+    else:
+        pres = value_list[4]
+
+    reference = ReferenceState(uvel=uvel, temp=temp, dens=dens, pres=pres, re1=re1)
+
+    # debug output for devs
+    logger.debug(
+        "reference state (%s): uvel=%.6g temp=%.6g dens=%.6g pres=%.6g re1=%.6g",
+        mc_cfg.reference, uvel, temp, dens, pres, re1,
+    )
+
+    return reference
+
 
 # --------------------------------------------------
 # detect whether velocity profiles are dimensional
@@ -259,32 +351,22 @@ def convert_meanflow(
     # --------------------------------------------------
     logger.info("initialize binary output...")
 
-    # initiate output file
-    w = LastracWriter(
-        out, endianness="<", int_dtype=np.int32, real_dtype=np.float64
-    )
+    # --------------------------------------------------
+    # reference state: scales the profiles and goes into every station header
+    # --------------------------------------------------
+    reference = resolve_reference_state(cfg)
 
     # --------------------------------------------------
-    # read freestream values from config
+    # read the remaining values from config
     # --------------------------------------------------
-    temp_inf = cfg.flow_conditions.temp_inf
-    uvel_inf = cfg.flow_conditions.uvel_inf
-    dens_inf = cfg.flow_conditions.dens_inf
-    pres_inf = cfg.flow_conditions.pres_inf
     pr = cfg.flow_conditions.pr
-    re1 = cfg.flow_conditions.re1
     lref = cfg.geometry.l_ref
 
     # --------------------------------------------------
     # validate required flow conditions before entering the write loop
     # --------------------------------------------------
     required_flow = {
-        "temp_inf": temp_inf,
-        "uvel_inf": uvel_inf,
-        "dens_inf": dens_inf,
-        "pres_inf": pres_inf,
         "pr": pr,
-        "re1": re1,
         "l_ref": lref,
     }
     missing = [k for k, v in required_flow.items() if v is None]
@@ -294,18 +376,11 @@ def convert_meanflow(
             f"are None: {', '.join(missing)}"
         )
 
-    temp_inf = float(temp_inf)
-    uvel_inf = float(uvel_inf)
-    dens_inf = float(dens_inf)
-    pres_inf = float(pres_inf)
     pr = float(pr)
-    re1 = float(re1)
     lref = float(lref)
 
     if pr <= 0.0:
         raise ValueError(f"flow_conditions.pr must be positive, got {pr:.6e}")
-    if re1 <= 0.0:
-        raise ValueError(f"flow_conditions.re1 must be positive, got {re1:.6e}")
     if lref <= 0.0:
         raise ValueError(f"geometry.l_ref must be positive, got {lref:.6e}")
 
@@ -313,19 +388,6 @@ def convert_meanflow(
     # number of wall-normal points (used repeatedly below)
     # --------------------------------------------------
     n_eta = grid.y.shape[0]
-
-    # --------------------------------------------------
-    # write file header
-    # --------------------------------------------------
-    w.write_header(
-        title="lst_meanflow",
-        n_station=n_i,
-        igas=1,
-        iunit=1,
-        Pr=pr,
-        stat_pres=pres_inf,
-        nsp=0,
-    )
 
     # check if user requested nondimensionalization of the output meanflow file
     do_nondimensionalize = bool(cfg.meanflow_conversion.nondimensionalize)
@@ -344,16 +406,27 @@ def convert_meanflow(
         logger.warning("meanflow_conversion.nondimensionalize=false")
         logger.warning("meanflow.bin will retain dimensional velocity, temperature, and pressure values but lst code requires nondimensional inputs.")
 
-    # throw error if user requested nondimensionalization but freestream values are non-positive (would lead to divide by zero)
-    if do_nondimensionalize:
-        if temp_inf <= 0.0:
-            raise ValueError(f"flow_conditions.temp_inf must be positive, got {temp_inf:.6e}")
-        if uvel_inf <= 0.0:
-            raise ValueError(f"flow_conditions.uvel_inf must be positive, got {uvel_inf:.6e}")
-        if dens_inf <= 0.0:
-            raise ValueError(f"flow_conditions.dens_inf must be positive, got {dens_inf:.6e}")
+    # initiate output file only after every check passed, so a failed run
+    # leaves no partial meanflow file behind
+    w = LastracWriter(
+        out, endianness="<", int_dtype=np.int32, real_dtype=np.float64
+    )
 
-    pres_scale = dens_inf * uvel_inf**2.0 if do_nondimensionalize else 1.0
+    # --------------------------------------------------
+    # write file header
+    # --------------------------------------------------
+    w.write_header(
+        title="lst_meanflow",
+        n_station=n_i,
+        igas=1,
+        iunit=1,
+        Pr=pr,
+        stat_pres=reference.pres,
+        nsp=0,
+    )
+
+    # pressure scale: dynamic pressure of the reference state (positivity checked when resolved)
+    pres_scale = reference.dens * reference.uvel**2.0 if do_nondimensionalize else 1.0
 
     # --------------------------------------------------
     # generate rich progress bar and loop over stations to write to lastrac meanflow file
@@ -371,10 +444,10 @@ def convert_meanflow(
             s_value = float(s[i_loc])
 
             if do_nondimensionalize:
-                # nondimensionalize flow quantities using config freestream references
-                uvel_out = urot[:, i_loc] / uvel_inf
-                vvel_out = vrot[:, i_loc] / uvel_inf
-                temp_out = flow.field("temp")[:, i_loc] / temp_inf
+                # nondimensionalize flow quantities by the reference state
+                uvel_out = urot[:, i_loc] / reference.uvel
+                vvel_out = vrot[:, i_loc] / reference.uvel
+                temp_out = flow.field("temp")[:, i_loc] / reference.temp
                 pres_out = flow.field("pres")[:, i_loc] / pres_scale
             else:
                 # keep dimensional output when nondimensionalize=false
@@ -389,13 +462,13 @@ def convert_meanflow(
                 n_eta=grid.y.shape[0],
                 s=s_value,
                 lref=lref,
-                re1=re1,
+                re1=reference.re1,
                 kappa=kappa[i_loc],
                 rloc=r[i_loc],
                 drdx=drdx[i_loc],
-                stat_temp=temp_inf,
-                stat_uvel=uvel_inf,
-                stat_dens=dens_inf,
+                stat_temp=reference.temp,
+                stat_uvel=reference.uvel,
+                stat_dens=reference.dens,
             )
 
             # write dimensional wall-normal coordinate
@@ -419,7 +492,7 @@ def convert_meanflow(
                 wvel_i = np.zeros(n_eta, dtype=float)
 
             if do_nondimensionalize:
-                w.write_station_vector(wvel_i / uvel_inf)
+                w.write_station_vector(wvel_i / reference.uvel)
             else:
                 w.write_station_vector(wvel_i)
 

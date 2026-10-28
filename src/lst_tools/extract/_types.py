@@ -79,3 +79,6 @@ class QuadMeshSampler:
     n_bin_x: int
     n_bin_y: int
     bin_to_cells: dict[tuple[int, int], list[int]]
+    # True when nodal_fields were reconstructed from cell-centred data (e.g. US3D);
+    # their wall-node values then need the wall conditions applied
+    reconstructed_from_cells: bool = False
